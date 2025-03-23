@@ -114,6 +114,17 @@ void destroy_node(Node* node) {
         close(node->socket_fd);
     }
     
+    // Free DHT and Rendezvous data if present
+    if (node->dht_data) {
+        free(node->dht_data);
+        node->dht_data = NULL;
+    }
+    
+    if (node->rendezvous_data) {
+        free(node->rendezvous_data);
+        node->rendezvous_data = NULL;
+    }
+    
     // Free memory
     free(node);
     
@@ -150,6 +161,38 @@ int add_peer(Node* node, int peer_id, const char* peer_ip, int peer_port) {
     node->peer_count++;
     
     printf("Added peer: Node %d at %s:%d\n", peer_id, peer_ip, peer_port);
+    return 0;
+}
+
+// Add a peer using NodeInfo structure
+int add_peer_info(Node* node, NodeInfo* peer_info) {
+    if (!node || !peer_info) {
+        return -1;
+    }
+    
+    // Check if peer already exists
+    for (int i = 0; i < node->peer_count; i++) {
+        if (node->peers[i].id == peer_info->id) {
+            // Update peer information
+            memcpy(&node->peers[i], peer_info, sizeof(NodeInfo));
+            node->peers[i].last_seen = time(NULL);
+            printf("Updated peer: Node %d at %s:%d\n", peer_info->id, peer_info->ip, peer_info->port);
+            return 0;
+        }
+    }
+    
+    // Check if peer list is full
+    if (node->peer_count >= MAX_NODES) {
+        fprintf(stderr, "Peer list is full\n");
+        return -1;
+    }
+    
+    // Add new peer
+    memcpy(&node->peers[node->peer_count], peer_info, sizeof(NodeInfo));
+    node->peers[node->peer_count].last_seen = time(NULL);
+    node->peer_count++;
+    
+    printf("Added peer: Node %d at %s:%d\n", peer_info->id, peer_info->ip, peer_info->port);
     return 0;
 }
 

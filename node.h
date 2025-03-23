@@ -51,6 +51,7 @@ typedef struct Node {
     int peer_count;             // Number of connected peers
     pthread_mutex_t peers_mutex; // Mutex for thread-safe peer list access
     void* dht_data;             // DHT related data (opaque pointer)
+    void* rendezvous_data;      // Rendezvous related data (opaque pointer)
 } Node;
 
 typedef struct {
@@ -79,6 +80,7 @@ typedef struct {
 Node* create_node(int id, const char* ip, int port);
 void destroy_node(Node* node);
 int add_peer(Node* node, int peer_id, const char* peer_ip, int peer_port);
+int add_peer_info(Node* node, NodeInfo* peer_info);
 int remove_peer(Node* node, int peer_id);
 int connect_to_node(Node* from_node, int to_id);
 int send_message(Node* from_node, int to_id, const char* data);

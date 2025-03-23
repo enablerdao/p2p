@@ -9,6 +9,7 @@
 #include "security.h"
 #include "diagnostics.h"
 #include "dht.h"
+#include "rendezvous.h"
 #include <signal.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -141,6 +142,11 @@ void cleanup_network() {
                 dht_cleanup(nodes[i]);
             }
             
+            // Clean up Rendezvous if used
+            if (use_rendezvous) {
+                rendezvous_cleanup(nodes[i]);
+            }
+            
             // Remove UPnP port mappings
             if (nodes[i]->use_upnp) {
                 upnp_delete_port_mapping(BASE_PORT + i, "UDP");
@@ -219,6 +225,7 @@ int main(int argc, char* argv[]) {
     bool use_enhanced_discovery = true; // デフォルトで有効化
     bool use_firewall_bypass = true; // デフォルトで有効化
     bool use_dht = true;             // デフォルトでDHT有効化
+    bool use_rendezvous = true;      // デフォルトでランデブー機能有効化
     bool disable_nat_traversal = false;
     bool disable_upnp = false;
     bool disable_discovery = false;
@@ -226,6 +233,7 @@ int main(int argc, char* argv[]) {
     bool disable_enhanced_discovery = false;
     bool disable_firewall_bypass = false;
     bool disable_dht = false;
+    bool disable_rendezvous = false;
     char stun_server[256] = "stun.l.google.com";
     char discovery_server[256] = DEFAULT_DISCOVERY_SERVER;
     int discovery_port = DEFAULT_DISCOVERY_PORT;
@@ -240,7 +248,7 @@ int main(int argc, char* argv[]) {
     int remote_peer_count = 0;
     
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "n:TUDFSEHs:d:p:hf")) != -1) {
+    while ((opt = getopt(argc, argv, "n:TUDFSEHRs:d:p:hf")) != -1) {
         switch (opt) {
             case 'n':
                 node_count = atoi(optarg);
@@ -269,6 +277,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'H':  // DHT機能を無効化
                 disable_dht = true;
+                break;
+            case 'R':  // ランデブー機能を無効化
+                disable_rendezvous = true;
                 break;
             case 'd':  // ディスカバリーサーバーを指定
                 {
@@ -322,6 +333,7 @@ int main(int argc, char* argv[]) {
     if (disable_enhanced_discovery) use_enhanced_discovery = false;
     if (disable_firewall_bypass) use_firewall_bypass = false;
     if (disable_dht) use_dht = false;
+    if (disable_rendezvous) use_rendezvous = false;
     
     // Set up signal handler
     signal(SIGINT, handle_signal);
@@ -338,6 +350,7 @@ int main(int argc, char* argv[]) {
     printf("│ Discovery server:    %s                      │\n", use_discovery_server ? "ENABLED " : "DISABLED");
     printf("│ Firewall bypass:     %s                      │\n", use_firewall_bypass ? "ENABLED " : "DISABLED");
     printf("│ DHT:                %s                      │\n", use_dht ? "ENABLED " : "DISABLED");
+    printf("│ Rendezvous:         %s                      │\n", use_rendezvous ? "ENABLED " : "DISABLED");
     if (use_nat_traversal) {
         printf("│ STUN server:         %-30s │\n", stun_server);
     }
@@ -357,6 +370,19 @@ int main(int argc, char* argv[]) {
     if (use_dht) {
         for (int i = 0; i < num_nodes; i++) {
             dht_init(nodes[i]);
+        }
+    }
+    
+    // Initialize Rendezvous for all nodes if enabled
+    if (use_rendezvous) {
+        for (int i = 0; i < num_nodes; i++) {
+            rendezvous_init(nodes[i]);
+        }
+        
+        // デフォルトのランデブーキーを設定
+        const char* default_rendezvous_key = "/core/entrypoint/v1";
+        for (int i = 0; i < num_nodes; i++) {
+            rendezvous_join(nodes[i], default_rendezvous_key);
         }
     }
     
@@ -532,6 +558,54 @@ int main(int argc, char* argv[]) {
                         printf("  dht find <key> - Find nodes closest to a key\n");
                     }
                 }
+            } else if (strncmp(cmd_buffer, "rendezvous", 10) == 0) {
+                // ランデブー関連のコマンド
+                if (!use_rendezvous) {
+                    printf("Rendezvous is not enabled. Use -R option to enable it.\n");
+                } else {
+                    char *subcmd = cmd_buffer + 11; // "rendezvous "の後の部分
+                    
+                    if (strncmp(subcmd, "join ", 5) == 0) {
+                        // ランデブーキーに参加
+                        char *key = subcmd + 5;
+                        if (strlen(key) > 0) {
+                            if (rendezvous_join(nodes[0], key) == 0) {
+                                printf("Joined rendezvous key: %s\n", key);
+                            } else {
+                                printf("Failed to join rendezvous key: %s\n", key);
+                            }
+                        } else {
+                            printf("Usage: rendezvous join <key>\n");
+                        }
+                    } else if (strncmp(subcmd, "leave ", 6) == 0) {
+                        // ランデブーキーから離脱
+                        char *key = subcmd + 6;
+                        if (strlen(key) > 0) {
+                            if (rendezvous_leave(nodes[0], key) == 0) {
+                                printf("Left rendezvous key: %s\n", key);
+                            } else {
+                                printf("Failed to leave rendezvous key: %s\n", key);
+                            }
+                        } else {
+                            printf("Usage: rendezvous leave <key>\n");
+                        }
+                    } else if (strncmp(subcmd, "find ", 5) == 0) {
+                        // ランデブーキーに参加しているピアを検索
+                        char *key = subcmd + 5;
+                        if (strlen(key) > 0) {
+                            int count = rendezvous_find_peers(nodes[0], key);
+                            printf("Finding peers with rendezvous key: %s\n", key);
+                            printf("Sent query to %d DHT nodes\n", count);
+                        } else {
+                            printf("Usage: rendezvous find <key>\n");
+                        }
+                    } else {
+                        printf("Unknown rendezvous command. Available commands:\n");
+                        printf("  rendezvous join <key> - Join a rendezvous point\n");
+                        printf("  rendezvous leave <key> - Leave a rendezvous point\n");
+                        printf("  rendezvous find <key> - Find peers at a rendezvous point\n");
+                    }
+                }
             } else if (strcmp(cmd_buffer, "help") == 0) {
                 printf("Available commands:\n");
                 printf("  status       - Show status of all nodes\n");
@@ -540,6 +614,9 @@ int main(int argc, char* argv[]) {
                 printf("  send <id> <message> - Send a message to a specific node\n");
                 printf("  diag         - Run network diagnostics\n");
                 printf("  dht find <key> - Find nodes closest to a key in DHT\n");
+                printf("  rendezvous join <key> - Join a rendezvous point\n");
+                printf("  rendezvous leave <key> - Leave a rendezvous point\n");
+                printf("  rendezvous find <key> - Find peers at a rendezvous point\n");
                 printf("  help         - Show this help message\n");
                 printf("  exit, quit   - Exit the program\n");
             } else if (strcmp(cmd_buffer, "exit") == 0 || strcmp(cmd_buffer, "quit") == 0) {
