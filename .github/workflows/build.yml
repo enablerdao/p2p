@@ -1,0 +1,87 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libssl-dev
+    
+    - name: Fix Makefile
+      run: |
+        sed -i 's/^node_network:/\tnode_network:/' Makefile
+        sed -i 's/^%.o:/\t%.o:/' Makefile
+        sed -i 's/^clean:/\tclean:/' Makefile
+        sed -i 's/^rm -f/\trm -f/' Makefile
+        sed -i 's/^$(CC)/\t$(CC)/' Makefile
+    
+    - name: Build
+      run: make
+    
+    - name: Test basic functionality
+      run: |
+        # 基本的な機能テスト
+        ./node_network -n 1 -T -U -D -E -F &
+        PID=$!
+        sleep 5
+        kill $PID || true
+    
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: node_network-linux
+        path: node_network
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Check environment
+      run: |
+        uname -a
+        sw_vers
+        gcc --version
+    
+    - name: Install dependencies
+      run: |
+        brew install openssl@3
+    
+    - name: Fix Makefile
+      run: |
+        sed -i '' 's/^node_network:/node_network:/' Makefile
+        sed -i '' 's/^%.o:/%.o:/' Makefile
+        sed -i '' 's/^clean:/clean:/' Makefile
+        sed -i '' 's/^rm -f/rm -f/' Makefile
+        sed -i '' 's/^$(CC)/$(CC)/' Makefile
+    
+    - name: Build
+      run: |
+        export LDFLAGS="-L/usr/local/opt/openssl@3/lib"
+        export CPPFLAGS="-I/usr/local/opt/openssl@3/include"
+        make
+    
+    - name: Test basic functionality
+      run: |
+        # 基本的な機能テスト
+        ./node_network -n 1 -T -U -D -E -F &
+        PID=$!
+        sleep 5
+        kill $PID || true
+    
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: node_network-macos
+        path: node_network
