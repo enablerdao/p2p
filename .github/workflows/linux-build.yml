@@ -21,6 +21,12 @@ jobs:
         
     - name: Build
       run: |
+        # Fix Makefile indentation issues
+        sed -i 's/^node_network:/\tnode_network:/' Makefile
+        sed -i 's/^%.o:/\t%.o:/' Makefile
+        sed -i 's/^clean:/\tclean:/' Makefile
+        sed -i 's/^rm -f/\trm -f/' Makefile
+        sed -i 's/^$(CC)/\t$(CC)/' Makefile
         make
         
     - name: Test basic functionality
