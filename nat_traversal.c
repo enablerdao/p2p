@@ -26,8 +26,12 @@ int node_enable_nat_traversal(Node* node, const char* stun_server) {
     node->public_port = result->public_port;
     node->is_behind_nat = true;
     
-    printf("Node %d is behind NAT. Public address: %s:%d\n", 
-           node->id, node->public_ip, node->public_port);
+    printf("\n==================================================\n");
+    printf("Node %d is behind NAT\n", node->id);
+    printf("Public address: %s:%d\n", node->public_ip, node->public_port);
+    printf("To connect to this node from another computer, use:\n");
+    printf("  ./node_network -p %d:%s:%d\n", node->id, node->public_ip, node->public_port);
+    printf("==================================================\n");
     
     free(result);
     

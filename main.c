@@ -178,7 +178,7 @@ void print_usage(const char* program_name) {
 }
 
 int main(int argc, char* argv[]) {
-    int node_count = 10;
+    int node_count = 5; // デフォルトで5ノード
     bool use_nat_traversal = true;  // デフォルトで有効化
     bool use_upnp = true;           // デフォルトで有効化
     bool use_discovery = true;      // デフォルトで有効化
@@ -258,13 +258,20 @@ int main(int argc, char* argv[]) {
     // Set up signal handler
     signal(SIGINT, handle_signal);
     
-    printf("Starting node network with %d nodes...\n", node_count);
-    printf("NAT traversal: %s\n", use_nat_traversal ? "enabled" : "disabled");
-    printf("UPnP: %s\n", use_upnp ? "enabled" : "disabled");
-    printf("Automatic discovery: %s\n", use_discovery ? "enabled" : "disabled");
+    printf("\n\033[1;33m"); // Bold yellow text
+    printf("┌─────────────────────────────────────────────────────┐\n");
+    printf("│ P2P NODE NETWORK                                    │\n");
+    printf("├─────────────────────────────────────────────────────┤\n");
+    printf("│ Starting node network with %2d nodes                 │\n", node_count);
+    printf("│ NAT traversal:       %s                      │\n", use_nat_traversal ? "ENABLED " : "DISABLED");
+    printf("│ UPnP:                %s                      │\n", use_upnp ? "ENABLED " : "DISABLED");
+    printf("│ Automatic discovery: %s                      │\n", use_discovery ? "ENABLED " : "DISABLED");
+    printf("│ Firewall bypass:     %s                      │\n", use_firewall_bypass ? "ENABLED " : "DISABLED");
     if (use_nat_traversal) {
-        printf("STUN server: %s\n", stun_server);
+        printf("│ STUN server:         %-30s │\n", stun_server);
     }
+    printf("└─────────────────────────────────────────────────────┘\n");
+    printf("\033[0m"); // Reset text formatting
     
     // Initialize network
     init_network(node_count, use_nat_traversal, use_upnp, use_discovery, use_firewall_bypass, stun_server);
@@ -357,14 +364,28 @@ int main(int argc, char* argv[]) {
                     
                     int peer_id = atoi(id_str);
                     if (num_nodes > 0 && strlen(msg) > 0) {
-                        printf("Sending message to node %d: %s\n", peer_id, msg);
-                        if (send_message(nodes[0], peer_id, msg) == 0) {
-                            printf("Message sent successfully\n");
+                        // Check if the peer exists
+                        bool peer_exists = false;
+                        pthread_mutex_lock(&nodes[0]->peers_mutex);
+                        for (int i = 0; i < nodes[0]->peer_count; i++) {
+                            if (nodes[0]->peers[i].id == peer_id) {
+                                peer_exists = true;
+                                break;
+                            }
+                        }
+                        pthread_mutex_unlock(&nodes[0]->peers_mutex);
+                        
+                        if (peer_exists) {
+                            if (send_message(nodes[0], peer_id, msg) == 0) {
+                                // Message sent successfully (already printed by send_message)
+                            } else {
+                                printf("\033[1;31mFailed to send message\033[0m\n");
+                            }
                         } else {
-                            printf("Failed to send message\n");
+                            printf("\033[1;31mPeer node %d not found. Use 'list' to see available peers.\033[0m\n", peer_id);
                         }
                     } else {
-                        printf("Invalid node ID or empty message\n");
+                        printf("\033[1;31mInvalid node ID or empty message\033[0m\n");
                     }
                 } else {
                     printf("Usage: send <id> <message>\n");

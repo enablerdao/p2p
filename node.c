@@ -116,8 +116,12 @@ Node* create_node(int id, const char* ip, int port) {
         return NULL;
     }
 
-    printf("Node %d created and listening on %s:%d\n", id, node->ip, 
-           port == 0 ? BASE_PORT + id : port);
+    int actual_port = ntohs(node->addr.sin_port);
+    printf("\n==================================================\n");
+    printf("Node %d created and listening on %s:%d\n", id, node->ip, actual_port);
+    printf("To connect to this node from another computer, use:\n");
+    printf("  ./node_network -p %d:%s:%d\n", id, node->ip, actual_port);
+    printf("==================================================\n");
     return node;
 }
 
@@ -210,9 +214,23 @@ int send_message(Node* from_node, int to_id, const char* data) {
         return -1;
     }
 
+    // Print a more visible message notification
+    printf("\n\033[1;36m"); // Bold cyan text
+    printf("┌─────────────────────────────────────────────────────┐\n");
+    printf("│ MESSAGE SENT                                        │\n");
+    printf("├─────────────────────────────────────────────────────┤\n");
+    printf("│ From:    Node %d                                    │\n", from_node->id);
+    printf("│ To:      Node %d at %s:%d                │\n", 
+           to_id, from_node->peers[peer_index].ip, from_node->peers[peer_index].port);
+    printf("│ Content: %s\n", data);
+    printf("└─────────────────────────────────────────────────────┘\n");
+    printf("\033[0m"); // Reset text formatting
+    
+    // Also log to console in standard format
     printf("Node %d sent message to Node %d at %s:%d: %s\n", 
            from_node->id, to_id, from_node->peers[peer_index].ip, 
            from_node->peers[peer_index].port, data);
+    
     return 0;
 }
 
@@ -238,8 +256,25 @@ void* receive_messages(void* arg) {
             char sender_ip[MAX_IP_STR_LEN];
             inet_ntop(AF_INET, &(sender_addr.sin_addr), sender_ip, MAX_IP_STR_LEN);
             
+            // Print a more visible message notification
+            printf("\n\033[1;32m"); // Bold green text
+            printf("┌─────────────────────────────────────────────────────┐\n");
+            printf("│ MESSAGE RECEIVED                                    │\n");
+            printf("├─────────────────────────────────────────────────────┤\n");
+            printf("│ To:      Node %d                                    │\n", node->id);
+            printf("│ From:    Node %d at %s:%d                │\n", 
+                   msg.from_id, sender_ip, ntohs(sender_addr.sin_port));
+            printf("│ Content: %s\n", msg.data);
+            printf("└─────────────────────────────────────────────────────┘\n");
+            printf("\033[0m"); // Reset text formatting
+            
+            // Also log to console in standard format
             printf("Node %d received message from Node %d at %s:%d: %s\n", 
                    node->id, msg.from_id, sender_ip, ntohs(sender_addr.sin_port), msg.data);
+            
+            // Play a sound alert (ASCII bell)
+            printf("\a");
+            fflush(stdout);
         }
     }
 
