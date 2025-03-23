@@ -168,6 +168,7 @@ int enhanced_discovery_send_query(Node* node) {
 
 // Process discovery message
 int enhanced_discovery_process_message(Node* node, EnhancedDiscoveryMessage* msg, struct sockaddr_in* sender_addr) {
+    (void)sender_addr; // 未使用パラメータの警告を抑制
     // Skip our own messages
     if (msg->node_id == node->id) {
         return 0;

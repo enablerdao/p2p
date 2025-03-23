@@ -6,6 +6,8 @@ static bool discovery_running = false;
 
 // Register this node with the discovery server
 int register_with_discovery_server(Node* node, const char* server, int port) {
+    (void)server; // 未使用パラメータの警告を抑制
+    (void)port;   // 未使用パラメータの警告を抑制
     // In a real implementation, this would connect to a central server
     // For this demo, we'll simulate it with a local file
     
@@ -49,6 +51,8 @@ int register_with_discovery_server(Node* node, const char* server, int port) {
 
 // Query the discovery server for other nodes
 int query_discovery_server(Node* node, const char* server, int port) {
+    (void)server; // 未使用パラメータの警告を抑制
+    (void)port;   // 未使用パラメータの警告を抑制
     // In a real implementation, this would query a central server
     // For this demo, we'll read from the common file
     
@@ -159,6 +163,8 @@ void* discovery_server_thread(void* arg) {
 
 // Start discovery server client
 int start_discovery_server_client(Node* node, const char* server, int port) {
+    (void)server; // 未使用パラメータの警告を抑制
+    (void)port;   // 未使用パラメータの警告を抑制
     if (discovery_running) {
         return 0;  // Already running
     }
