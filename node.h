@@ -50,6 +50,7 @@ typedef struct Node {
     NodeInfo peers[MAX_NODES];  // Information about peer nodes
     int peer_count;             // Number of connected peers
     pthread_mutex_t peers_mutex; // Mutex for thread-safe peer list access
+    void* dht_data;             // DHT related data (opaque pointer)
 } Node;
 
 typedef struct {

@@ -8,6 +8,7 @@
 #include "reliability.h"
 #include "security.h"
 #include "diagnostics.h"
+#include "dht.h"
 #include <signal.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -43,9 +44,11 @@ void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_dis
 
     // Create nodes
     for (int i = 0; i < count; i++) {
-        nodes[i] = create_node(i, local_ip, BASE_PORT + i);
+        // ノードIDをランダムに生成（0-999の範囲）
+        int random_id = rand() % 1000;
+        nodes[i] = create_node(random_id, local_ip, BASE_PORT + i);
         if (!nodes[i]) {
-            fprintf(stderr, "Failed to create node %d\n", i);
+            fprintf(stderr, "Failed to create node %d\n", random_id);
             continue;
         }
         
@@ -133,6 +136,11 @@ void cleanup_network() {
     // Clean up nodes
     for (int i = 0; i < num_nodes; i++) {
         if (nodes[i]) {
+            // Clean up DHT if used
+            if (use_dht) {
+                dht_cleanup(nodes[i]);
+            }
+            
             // Remove UPnP port mappings
             if (nodes[i]->use_upnp) {
                 upnp_delete_port_mapping(BASE_PORT + i, "UDP");
@@ -210,12 +218,14 @@ int main(int argc, char* argv[]) {
     bool use_discovery_server = false; // デフォルトで無効化
     bool use_enhanced_discovery = true; // デフォルトで有効化
     bool use_firewall_bypass = true; // デフォルトで有効化
+    bool use_dht = true;             // デフォルトでDHT有効化
     bool disable_nat_traversal = false;
     bool disable_upnp = false;
     bool disable_discovery = false;
     bool disable_discovery_server = false;
     bool disable_enhanced_discovery = false;
     bool disable_firewall_bypass = false;
+    bool disable_dht = false;
     char stun_server[256] = "stun.l.google.com";
     char discovery_server[256] = DEFAULT_DISCOVERY_SERVER;
     int discovery_port = DEFAULT_DISCOVERY_PORT;
@@ -230,7 +240,7 @@ int main(int argc, char* argv[]) {
     int remote_peer_count = 0;
     
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "n:TUDFSEs:d:p:hf")) != -1) {
+    while ((opt = getopt(argc, argv, "n:TUDFSEHs:d:p:hf")) != -1) {
         switch (opt) {
             case 'n':
                 node_count = atoi(optarg);
@@ -256,6 +266,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'F':  // ファイアウォール対策を無効化
                 disable_firewall_bypass = true;
+                break;
+            case 'H':  // DHT機能を無効化
+                disable_dht = true;
                 break;
             case 'd':  // ディスカバリーサーバーを指定
                 {
@@ -308,6 +321,7 @@ int main(int argc, char* argv[]) {
     if (disable_discovery_server) use_discovery_server = false;
     if (disable_enhanced_discovery) use_enhanced_discovery = false;
     if (disable_firewall_bypass) use_firewall_bypass = false;
+    if (disable_dht) use_dht = false;
     
     // Set up signal handler
     signal(SIGINT, handle_signal);
@@ -323,6 +337,7 @@ int main(int argc, char* argv[]) {
     printf("│ Enhanced discovery:  %s                      │\n", use_enhanced_discovery ? "ENABLED " : "DISABLED");
     printf("│ Discovery server:    %s                      │\n", use_discovery_server ? "ENABLED " : "DISABLED");
     printf("│ Firewall bypass:     %s                      │\n", use_firewall_bypass ? "ENABLED " : "DISABLED");
+    printf("│ DHT:                %s                      │\n", use_dht ? "ENABLED " : "DISABLED");
     if (use_nat_traversal) {
         printf("│ STUN server:         %-30s │\n", stun_server);
     }
@@ -337,6 +352,13 @@ int main(int argc, char* argv[]) {
     init_network(node_count, use_nat_traversal, use_upnp, use_discovery, 
                 use_discovery_server, use_enhanced_discovery, use_firewall_bypass, 
                 stun_server, discovery_server, discovery_port);
+                
+    // Initialize DHT for all nodes if enabled
+    if (use_dht) {
+        for (int i = 0; i < num_nodes; i++) {
+            dht_init(nodes[i]);
+        }
+    }
     
     // Add remote peers if specified
     if (remote_peer_count > 0) {
@@ -458,6 +480,14 @@ int main(int argc, char* argv[]) {
                 for (int i = 0; i < num_nodes; i++) {
                     printf("  Node %d: %s:%d\n", nodes[i]->id, nodes[i]->ip, 
                            ntohs(nodes[i]->addr.sin_port));
+                    
+                    // DHT情報を表示（DHT有効時）
+                    if (use_dht && nodes[i]->dht_data) {
+                        DhtData* dht_data = (DhtData*)nodes[i]->dht_data;
+                        char hex_id[DHT_ID_BITS/4 + 1];
+                        dht_id_to_hex(&dht_data->routing_table.self_id, hex_id, sizeof(hex_id));
+                        printf("    DHT ID: %s\n", hex_id);
+                    }
                 }
                 
                 // List all known remote peers
@@ -469,6 +499,39 @@ int main(int argc, char* argv[]) {
                 if (num_nodes > 0) {
                     run_network_diagnostics(nodes[0]);
                 }
+            } else if (strncmp(cmd_buffer, "dht", 3) == 0) {
+                // DHT関連のコマンド
+                if (!use_dht) {
+                    printf("DHT is not enabled. Use -H option to enable it.\n");
+                } else {
+                    char *subcmd = cmd_buffer + 4; // "dht "の後の部分
+                    
+                    if (strncmp(subcmd, "find ", 5) == 0) {
+                        // DHT検索コマンド
+                        char *key_str = subcmd + 5;
+                        if (strlen(key_str) > 0) {
+                            DhtId key = dht_generate_id_from_string(key_str);
+                            DhtNodeInfo results[10];
+                            int count = dht_find_node(nodes[0], &key, results, 10);
+                            
+                            printf("Found %d nodes closest to key: ", count);
+                            char hex_key[DHT_ID_BITS/4 + 1];
+                            dht_id_to_hex(&key, hex_key, sizeof(hex_key));
+                            printf("%s\n", hex_key);
+                            
+                            for (int i = 0; i < count; i++) {
+                                char hex_id[DHT_ID_BITS/4 + 1];
+                                dht_id_to_hex(&results[i].id, hex_id, sizeof(hex_id));
+                                printf("  %d. %s at %s:%d\n", i+1, hex_id, results[i].ip, results[i].port);
+                            }
+                        } else {
+                            printf("Usage: dht find <key>\n");
+                        }
+                    } else {
+                        printf("Unknown DHT command. Available commands:\n");
+                        printf("  dht find <key> - Find nodes closest to a key\n");
+                    }
+                }
             } else if (strcmp(cmd_buffer, "help") == 0) {
                 printf("Available commands:\n");
                 printf("  status       - Show status of all nodes\n");
@@ -476,6 +539,7 @@ int main(int argc, char* argv[]) {
                 printf("  ping <id>    - Ping a specific node\n");
                 printf("  send <id> <message> - Send a message to a specific node\n");
                 printf("  diag         - Run network diagnostics\n");
+                printf("  dht find <key> - Find nodes closest to a key in DHT\n");
                 printf("  help         - Show this help message\n");
                 printf("  exit, quit   - Exit the program\n");
             } else if (strcmp(cmd_buffer, "exit") == 0 || strcmp(cmd_buffer, "quit") == 0) {

@@ -254,6 +254,7 @@ node_network.exe -n 5
 | `reliability.h/reliability.c` | 接続の信頼性向上機能 |
 | `security.h/security.c` | メッセージ認証機能 |
 | `diagnostics.h/diagnostics.c` | ネットワーク診断機能 |
+| `dht.h/dht.c` | 分散ハッシュテーブル（DHT）の実装 |
 | `main.c` | メインプログラム（ネットワーク初期化、CLI） |
 | `Makefile` | ビルド設定 |
 
