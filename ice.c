@@ -67,6 +67,10 @@ int ice_cleanup(Node* node) {
     return 0;
 }
 
+// マクロ定義
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+
 // 候補の優先度を計算
 static int calculate_priority(IceCandidateType type, const char* ip) {
     // タイプ優先度

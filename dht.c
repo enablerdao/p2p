@@ -10,20 +10,7 @@
 static pthread_t dht_thread;
 static bool dht_running = false;
 
-// ノードにDHTデータを追加するための拡張
-typedef struct {
-    RoutingTable routing_table;
-    pthread_mutex_t dht_mutex;
-    
-    // 値の保存用ハッシュテーブル（簡易実装）
-    struct {
-        DhtId key;
-        uint8_t value[MAX_BUFFER];
-        size_t value_len;
-        bool in_use;
-    } storage[100];  // 最大100個の値を保存
-    int storage_count;
-} DhtData;
+// DHT初期化用の内部関数
 
 // DHT初期化
 void dht_init(Node* node) {
@@ -38,18 +25,28 @@ void dht_init(Node* node) {
     memset(dht_data, 0, sizeof(DhtData));
     pthread_mutex_init(&dht_data->dht_mutex, NULL);
     
+    // ルーティングテーブルの確保
+    dht_data->routing_table = (RoutingTable*)malloc(sizeof(RoutingTable));
+    if (!dht_data->routing_table) {
+        perror("Failed to allocate routing table");
+        free(dht_data);
+        return;
+    }
+    
+    // ルーティングテーブルの初期化
+    memset(dht_data->routing_table, 0, sizeof(RoutingTable));
+    
     // ノードIDからDHT IDを生成
     char id_str[64];
     snprintf(id_str, sizeof(id_str), "node-%d-%s-%d", node->id, node->ip, ntohs(node->addr.sin_port));
-    dht_data->routing_table.self_id = dht_generate_id_from_string(id_str);
+    dht_data->routing_table->self_id = dht_generate_id_from_string(id_str);
     
-    // ノードにDHTデータを関連付ける（実際のNode構造体にDHTデータへのポインタを追加する必要がある）
-    // この例では、ノードのユーザーデータとして保存する方法を示す
+    // ノードにDHTデータを関連付ける
     node->dht_data = dht_data;
     
     // DHT IDを表示
     char hex_id[DHT_ID_BITS/4 + 1];
-    dht_id_to_hex(&dht_data->routing_table.self_id, hex_id, sizeof(hex_id));
+    dht_id_to_hex(&dht_data->routing_table->self_id, hex_id, sizeof(hex_id));
     printf("Node %d initialized with DHT ID: %s\n", node->id, hex_id);
     
     // メンテナンススレッドを開始
@@ -124,19 +121,19 @@ void dht_add_node(Node* node, const DhtNodeInfo* dht_node) {
     pthread_mutex_lock(&dht_data->dht_mutex);
     
     // 自分自身は追加しない
-    if (memcmp(dht_node->id.bytes, dht_data->routing_table.self_id.bytes, DHT_ID_BITS/8) == 0) {
+    if (memcmp(dht_node->id.bytes, dht_data->routing_table->self_id.bytes, DHT_ID_BITS/8) == 0) {
         pthread_mutex_unlock(&dht_data->dht_mutex);
         return;
     }
     
     // IDの距離を計算して適切なバケットを見つける
-    int bucket_idx = dht_id_distance(&dht_data->routing_table.self_id, &dht_node->id);
+    int bucket_idx = dht_id_distance(&dht_data->routing_table->self_id, &dht_node->id);
     if (bucket_idx >= DHT_ID_BITS) {
         pthread_mutex_unlock(&dht_data->dht_mutex);
         return;  // 同じIDは追加しない
     }
     
-    KBucket* bucket = &dht_data->routing_table.buckets[bucket_idx];
+    KBucket* bucket = &dht_data->routing_table->buckets[bucket_idx];
     
     // すでに存在するか確認
     for (int i = 0; i < bucket->count; i++) {
@@ -217,7 +214,7 @@ int dht_find_node(Node* node, const DhtId* target_id, DhtNodeInfo* result, int m
     
     // すべてのバケットからノードを収集
     for (int i = 0; i < DHT_ID_BITS; i++) {
-        KBucket* bucket = &dht_data->routing_table.buckets[i];
+        KBucket* bucket = &dht_data->routing_table->buckets[i];
         for (int j = 0; j < bucket->count; j++) {
             distances[total_nodes].info = bucket->nodes[j];
             distances[total_nodes].distance = dht_id_distance(target_id, &bucket->nodes[j].id);
@@ -326,12 +323,12 @@ void dht_refresh_buckets(Node* node) {
     
     // 各バケットを確認
     for (int i = 0; i < DHT_ID_BITS; i++) {
-        KBucket* bucket = &dht_data->routing_table.buckets[i];
+        KBucket* bucket = &dht_data->routing_table->buckets[i];
         
         // 一定時間更新されていないバケットを更新
         if (bucket->count > 0 && now - bucket->last_updated > DHT_REFRESH_INTERVAL) {
             // ランダムなIDを生成してそのバケットに対応するIDを作成
-            DhtId random_id = dht_data->routing_table.self_id;
+            DhtId random_id = dht_data->routing_table->self_id;
             
             // i番目のビットを反転
             int byte_idx = i / 8;

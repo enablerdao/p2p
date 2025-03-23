@@ -308,7 +308,7 @@ int rendezvous_process_message(Node* node, RendezvousMessage* msg, struct sockad
                 }
                 
                 // ピアリストに追加
-                add_peer(node, &peer_info);
+                add_peer_info(node, &peer_info);
                 
                 // 接続要求を送信
                 RendezvousMessage connect_msg;
@@ -360,7 +360,7 @@ int rendezvous_process_message(Node* node, RendezvousMessage* msg, struct sockad
                 }
                 
                 // ピアリストに追加
-                add_peer(node, &peer_info);
+                add_peer_info(node, &peer_info);
                 
                 // 接続確立のためのメッセージを送信
                 // （実際の実装では、NAT越えのための処理が必要）

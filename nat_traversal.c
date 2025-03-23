@@ -27,12 +27,18 @@ int node_enable_nat_traversal(Node* node, const char* stun_server) {
     node->public_port = result->public_port;
     node->is_behind_nat = true;
     
-    printf("\n==================================================\n");
-    printf("Node %d is behind NAT\n", node->id);
-    printf("Public address: %s:%d\n", node->public_ip, node->public_port);
-    printf("To connect to this node from another computer, use:\n");
-    printf("  ./node_network -p %d:%s:%d\n", node->id, node->public_ip, node->public_port);
-    printf("==================================================\n");
+    printf("\n\033[1;38;5;208m╔══════════════════════════════════════════════════════════╗\033[0m\n");
+    printf("\033[1;38;5;208m║\033[0m \033[1;38;5;226m🔍 NAT DETECTED\033[0m                                       \033[1;38;5;208m║\033[0m\n");
+    printf("\033[1;38;5;208m╠══════════════════════════════════════════════════════════╣\033[0m\n");
+    printf("\033[1;38;5;208m║\033[0m \033[1;38;5;226mNode ID\033[0m:      \033[1;38;5;46m%-42d\033[0m \033[1;38;5;208m║\033[0m\n", node->id);
+    printf("\033[1;38;5;208m║\033[0m \033[1;38;5;226mPublic IP\033[0m:    \033[1;38;5;46m%-42s\033[0m \033[1;38;5;208m║\033[0m\n", node->public_ip);
+    printf("\033[1;38;5;208m║\033[0m \033[1;38;5;226mPublic Port\033[0m:  \033[1;38;5;46m%-42d\033[0m \033[1;38;5;208m║\033[0m\n", node->public_port);
+    printf("\033[1;38;5;208m╠══════════════════════════════════════════════════════════╣\033[0m\n");
+    printf("\033[1;38;5;208m║\033[0m \033[38;5;252mTo connect to this node from another computer, use:\033[0m      \033[1;38;5;208m║\033[0m\n");
+    printf("\033[1;38;5;208m║\033[0m \033[38;5;252m  ./node_network -p %d:%s:%d\033[0m%*s\033[1;38;5;208m║\033[0m\n", 
+           node->id, node->public_ip, node->public_port, 
+           (int)(42 - strlen(node->public_ip) - 15 - (node->id > 999 ? 4 : (node->id > 99 ? 3 : (node->id > 9 ? 2 : 1))) - (node->public_port > 9999 ? 5 : (node->public_port > 999 ? 4 : (node->public_port > 99 ? 3 : (node->public_port > 9 ? 2 : 1))))), "");
+    printf("\033[1;38;5;208m╚══════════════════════════════════════════════════════════╝\033[0m\n");
     
     free(result);
     

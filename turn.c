@@ -10,10 +10,7 @@
 #include <openssl/sha.h>
 #include <pthread.h>
 
-// TURNクライアントデータ
-typedef struct {
-    TurnClient client;
-} TurnData;
+// TURNクライアントデータの実装
 
 // TURNメッセージヘッダ
 typedef struct {

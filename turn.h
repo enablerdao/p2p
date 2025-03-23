@@ -3,6 +3,9 @@
 
 #include "node.h"
 
+// 前方宣言
+typedef struct TurnData TurnData;
+
 // TURNサーバーの設定
 #define TURN_DEFAULT_PORT 3478
 #define TURN_MAX_BUFFER 1500
@@ -69,6 +72,11 @@ typedef struct {
     bool refresh_running;
     pthread_mutex_t mutex;
 } TurnClient;
+
+// TURNクライアントデータ
+struct TurnData {
+    TurnClient client;
+};
 
 // 関数プロトタイプ
 int turn_init(Node* node, const char* server, int port, const char* username, const char* password);

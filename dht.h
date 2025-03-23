@@ -20,6 +20,21 @@ typedef struct {
     uint8_t bytes[DHT_ID_BITS/8];
 } DhtId;
 
+// DHT データ構造体
+typedef struct {
+    struct RoutingTable* routing_table;
+    pthread_mutex_t dht_mutex;
+    
+    // 値の保存用ハッシュテーブル（簡易実装）
+    struct {
+        DhtId key;
+        uint8_t value[MAX_BUFFER];
+        size_t value_len;
+        bool in_use;
+    } storage[100];  // 最大100個の値を保存
+    int storage_count;
+} DhtData;
+
 // DHT ノード情報
 typedef struct {
     DhtId id;                    // ノードのDHT ID
@@ -36,7 +51,7 @@ typedef struct {
 } KBucket;
 
 // DHT ルーティングテーブル
-typedef struct {
+typedef struct RoutingTable {
     KBucket buckets[DHT_ID_BITS]; // 各ビット位置に対応するバケット
     DhtId self_id;                // 自分のID
 } RoutingTable;

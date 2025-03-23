@@ -20,6 +20,18 @@ Node* nodes[MAX_NODES];
 int num_nodes = 0;
 volatile sig_atomic_t running = 1;
 
+// グローバル設定フラグ
+bool use_nat_traversal = true;
+bool use_upnp = true;
+bool use_discovery = true;
+bool use_discovery_server = false;
+bool use_enhanced_discovery = true;
+bool use_firewall_bypass = true;
+bool use_dht = true;
+bool use_rendezvous = true;
+bool use_turn = true;
+bool use_ice = true;
+
 // Signal handler for graceful shutdown
 void handle_signal(int sig) {
     (void)sig; // 未使用パラメータの警告を抑制
@@ -362,29 +374,43 @@ int main(int argc, char* argv[]) {
     // Set up signal handler
     signal(SIGINT, handle_signal);
     
-    printf("\n\033[1;33m"); // Bold yellow text
-    printf("┌─────────────────────────────────────────────────────┐\n");
-    printf("│ P2P NODE NETWORK                                    │\n");
-    printf("├─────────────────────────────────────────────────────┤\n");
-    printf("│ Starting node network with %2d nodes                 │\n", node_count);
-    printf("│ NAT traversal:       %s                      │\n", use_nat_traversal ? "ENABLED " : "DISABLED");
-    printf("│ UPnP:                %s                      │\n", use_upnp ? "ENABLED " : "DISABLED");
-    printf("│ Automatic discovery: %s                      │\n", use_discovery ? "ENABLED " : "DISABLED");
-    printf("│ Enhanced discovery:  %s                      │\n", use_enhanced_discovery ? "ENABLED " : "DISABLED");
-    printf("│ Discovery server:    %s                      │\n", use_discovery_server ? "ENABLED " : "DISABLED");
-    printf("│ Firewall bypass:     %s                      │\n", use_firewall_bypass ? "ENABLED " : "DISABLED");
-    printf("│ DHT:                %s                      │\n", use_dht ? "ENABLED " : "DISABLED");
-    printf("│ Rendezvous:         %s                      │\n", use_rendezvous ? "ENABLED " : "DISABLED");
-    printf("│ TURN:               %s                      │\n", use_turn ? "ENABLED " : "DISABLED");
-    printf("│ ICE:                %s                      │\n", use_ice ? "ENABLED " : "DISABLED");
+    printf("\n\033[1;38;5;39m"); // Bold bright blue text
+    printf("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n");
+    printf("┃                                                     ┃\n");
+    printf("┃  ██████╗ ██████╗ ██████╗     ███╗   ██╗███████╗████████╗ ┃\n");
+    printf("┃  ██╔══██╗╚════██╗██╔══██╗    ████╗  ██║██╔════╝╚══██╔══╝ ┃\n");
+    printf("┃  ██████╔╝ █████╔╝██████╔╝    ██╔██╗ ██║█████╗     ██║    ┃\n");
+    printf("┃  ██╔═══╝  ╚═══██╗██╔═══╝     ██║╚██╗██║██╔══╝     ██║    ┃\n");
+    printf("┃  ██║     ██████╔╝██║         ██║ ╚████║███████╗   ██║    ┃\n");
+    printf("┃  ╚═╝     ╚═════╝ ╚═╝         ╚═╝  ╚═══╝╚══════╝   ╚═╝    ┃\n");
+    printf("┃                                                     ┃\n");
+    printf("┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+    printf("┃                   \033[1;38;5;226mNETWORK CONFIG\033[1;38;5;39m                   ┃\n");
+    printf("┣━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+    printf("┃ \033[1;38;5;226mNodes\033[1;38;5;39m: %-20d┃ \033[1;38;5;226mRendezvous Key\033[1;38;5;39m: /core/entrypoint/v1 ┃\n", node_count);
+    printf("┣━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+    printf("┃ \033[1;38;5;226mFeature\033[1;38;5;39m                  ┃ \033[1;38;5;226mStatus\033[1;38;5;39m                    ┃\n");
+    printf("┣━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+    printf("┃ NAT Traversal             ┃ %s                    ┃\n", use_nat_traversal ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ UPnP                      ┃ %s                    ┃\n", use_upnp ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ Automatic Discovery       ┃ %s                    ┃\n", use_discovery ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ Enhanced Discovery        ┃ %s                    ┃\n", use_enhanced_discovery ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ Discovery Server          ┃ %s                    ┃\n", use_discovery_server ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ Firewall Bypass           ┃ %s                    ┃\n", use_firewall_bypass ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ DHT                       ┃ %s                    ┃\n", use_dht ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ Rendezvous                ┃ %s                    ┃\n", use_rendezvous ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ TURN                      ┃ %s                    ┃\n", use_turn ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
+    printf("┃ ICE                       ┃ %s                    ┃\n", use_ice ? "\033[1;38;5;46mENABLED\033[1;38;5;39m " : "\033[1;38;5;196mDISABLED\033[1;38;5;39m");
     if (use_nat_traversal) {
-        printf("│ STUN server:         %-30s │\n", stun_server);
+        printf("┣━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+        printf("┃ \033[1;38;5;226mSTUN Server\033[1;38;5;39m              ┃ %-26s ┃\n", stun_server);
     }
     if (use_discovery_server) {
-        printf("│ Discovery server:    %-30s │\n", discovery_server);
-        printf("│ Discovery port:      %-30d │\n", discovery_port);
+        printf("┣━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━┫\n");
+        printf("┃ \033[1;38;5;226mDiscovery Server\033[1;38;5;39m         ┃ %-26s ┃\n", discovery_server);
+        printf("┃ \033[1;38;5;226mDiscovery Port\033[1;38;5;39m           ┃ %-26d ┃\n", discovery_port);
     }
-    printf("└─────────────────────────────────────────────────────┘\n");
+    printf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n");
     printf("\033[0m"); // Reset text formatting
     
     // Initialize network
@@ -488,15 +514,10 @@ int main(int argc, char* argv[]) {
     demo_messaging();
     
     // Keep running until signal received
-    printf("\n=== Network running. Press Ctrl+C to exit. ===\n");
-    printf("Available commands:\n");
-    printf("  status       - Show status of all nodes\n");
-    printf("  list, nodes  - List all nodes and peers\n");
-    printf("  ping <id>    - Ping a specific node\n");
-    printf("  send <id> <message> - Send a message to a specific node\n");
-    printf("  diag         - Run network diagnostics\n");
-    printf("  help         - Show help message\n");
-    printf("  exit, quit   - Exit the program\n");
+    printf("\n\033[1;38;5;45m╔══════════════════════════════════════════════════════════╗\033[0m\n");
+    printf("\033[1;38;5;45m║\033[0m \033[1;38;5;226m🚀 NETWORK RUNNING\033[0m                                     \033[1;38;5;45m║\033[0m\n");
+    printf("\033[1;38;5;45m║\033[0m \033[38;5;252mPress Ctrl+C to exit or type 'help' for available commands\033[0m \033[1;38;5;45m║\033[0m\n");
+    printf("\033[1;38;5;45m╚══════════════════════════════════════════════════════════╝\033[0m\n");
     
     time_t last_maintenance = time(NULL);
     
@@ -507,6 +528,10 @@ int main(int argc, char* argv[]) {
     char cmd_buffer[256];
     
     while (running) {
+        // Display command prompt
+        printf("\033[1;38;5;226m➤ \033[0m");
+        fflush(stdout);
+        
         // Check for user commands
         if (fgets(cmd_buffer, sizeof(cmd_buffer), stdin) != NULL) {
             cmd_buffer[strcspn(cmd_buffer, "\n")] = 0; // Remove newline
@@ -569,9 +594,10 @@ int main(int argc, char* argv[]) {
                     
                     // DHT情報を表示（DHT有効時）
                     if (use_dht && nodes[i]->dht_data) {
-                        DhtData* dht_data = (DhtData*)nodes[i]->dht_data;
+                        // DHT IDの表示
                         char hex_id[DHT_ID_BITS/4 + 1];
-                        dht_id_to_hex(&dht_data->routing_table.self_id, hex_id, sizeof(hex_id));
+                        DhtData* dht_data = (DhtData*)nodes[i]->dht_data;
+                        dht_id_to_hex(&dht_data->routing_table->self_id, hex_id, sizeof(hex_id));
                         printf("    DHT ID: %s\n", hex_id);
                     }
                 }
@@ -713,19 +739,27 @@ int main(int argc, char* argv[]) {
                     }
                 }
             } else if (strcmp(cmd_buffer, "help") == 0) {
-                printf("Available commands:\n");
-                printf("  status       - Show status of all nodes\n");
-                printf("  list, nodes  - List all nodes and peers\n");
-                printf("  ping <id>    - Ping a specific node\n");
-                printf("  send <id> <message> - Send a message to a specific node\n");
-                printf("  diag         - Run network diagnostics\n");
-                printf("  dht find <key> - Find nodes closest to a key in DHT\n");
-                printf("  rendezvous join <key> - Join a rendezvous point\n");
-                printf("  rendezvous leave <key> - Leave a rendezvous point\n");
-                printf("  rendezvous find <key> - Find peers at a rendezvous point\n");
-                printf("  ice status   - Show ICE connection status\n");
-                printf("  help         - Show this help message\n");
-                printf("  exit, quit   - Exit the program\n");
+                printf("\n\033[1;38;5;219m╔══════════════════════════════════════════════════════════╗\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m \033[1;38;5;226m📋 AVAILABLE COMMANDS\033[0m                                 \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m╠══════════════════════════════════════════════════════════╣\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m \033[1;38;5;226mBasic Commands\033[0m                                        \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mstatus\033[0m       - Show status of all nodes             \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mlist\033[0m, \033[1;38;5;159mnodes\033[0m  - List all nodes and peers           \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mping <id>\033[0m    - Ping a specific node                 \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159msend <id> <message>\033[0m - Send a message to a node      \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mdiag\033[0m         - Run network diagnostics              \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m╠══════════════════════════════════════════════════════════╣\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m \033[1;38;5;226mAdvanced Features\033[0m                                     \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mdht find <key>\033[0m - Find nodes closest to a key in DHT \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mrendezvous join <key>\033[0m - Join a rendezvous point     \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mrendezvous leave <key>\033[0m - Leave a rendezvous point   \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mrendezvous find <key>\033[0m - Find peers at rendezvous    \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mice status\033[0m   - Show ICE connection status           \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m╠══════════════════════════════════════════════════════════╣\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m \033[1;38;5;226mSystem Commands\033[0m                                       \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mhelp\033[0m         - Show this help message               \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m║\033[0m   \033[1;38;5;159mexit\033[0m, \033[1;38;5;159mquit\033[0m   - Exit the program                   \033[1;38;5;219m║\033[0m\n");
+                printf("\033[1;38;5;219m╚══════════════════════════════════════════════════════════╝\033[0m\n");
             } else if (strcmp(cmd_buffer, "exit") == 0 || strcmp(cmd_buffer, "quit") == 0) {
                 running = 0;
             } else if (strlen(cmd_buffer) > 0) {
