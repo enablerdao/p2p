@@ -10,6 +10,8 @@
 #include "diagnostics.h"
 #include "dht.h"
 #include "rendezvous.h"
+#include "turn.h"
+#include "ice.h"
 #include <signal.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -147,6 +149,16 @@ void cleanup_network() {
                 rendezvous_cleanup(nodes[i]);
             }
             
+            // Clean up ICE if used
+            if (use_ice) {
+                ice_cleanup(nodes[i]);
+            }
+            
+            // Clean up TURN if used
+            if (use_turn) {
+                turn_cleanup(nodes[i]);
+            }
+            
             // Remove UPnP port mappings
             if (nodes[i]->use_upnp) {
                 upnp_delete_port_mapping(BASE_PORT + i, "UDP");
@@ -226,6 +238,8 @@ int main(int argc, char* argv[]) {
     bool use_firewall_bypass = true; // デフォルトで有効化
     bool use_dht = true;             // デフォルトでDHT有効化
     bool use_rendezvous = true;      // デフォルトでランデブー機能有効化
+    bool use_turn = true;            // デフォルトでTURN有効化
+    bool use_ice = true;             // デフォルトでICE有効化
     bool disable_nat_traversal = false;
     bool disable_upnp = false;
     bool disable_discovery = false;
@@ -234,6 +248,8 @@ int main(int argc, char* argv[]) {
     bool disable_firewall_bypass = false;
     bool disable_dht = false;
     bool disable_rendezvous = false;
+    bool disable_turn = false;
+    bool disable_ice = false;
     char stun_server[256] = "stun.l.google.com";
     char discovery_server[256] = DEFAULT_DISCOVERY_SERVER;
     int discovery_port = DEFAULT_DISCOVERY_PORT;
@@ -248,7 +264,7 @@ int main(int argc, char* argv[]) {
     int remote_peer_count = 0;
     
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "n:TUDFSEHRs:d:p:hf")) != -1) {
+    while ((opt = getopt(argc, argv, "n:TUDFSEHRICs:d:p:t:hf")) != -1) {
         switch (opt) {
             case 'n':
                 node_count = atoi(optarg);
@@ -280,6 +296,12 @@ int main(int argc, char* argv[]) {
                 break;
             case 'R':  // ランデブー機能を無効化
                 disable_rendezvous = true;
+                break;
+            case 'I':  // ICE機能を無効化
+                disable_ice = true;
+                break;
+            case 'C':  // TURN機能を無効化
+                disable_turn = true;
                 break;
             case 'd':  // ディスカバリーサーバーを指定
                 {
@@ -334,6 +356,8 @@ int main(int argc, char* argv[]) {
     if (disable_firewall_bypass) use_firewall_bypass = false;
     if (disable_dht) use_dht = false;
     if (disable_rendezvous) use_rendezvous = false;
+    if (disable_turn) use_turn = false;
+    if (disable_ice) use_ice = false;
     
     // Set up signal handler
     signal(SIGINT, handle_signal);
@@ -351,6 +375,8 @@ int main(int argc, char* argv[]) {
     printf("│ Firewall bypass:     %s                      │\n", use_firewall_bypass ? "ENABLED " : "DISABLED");
     printf("│ DHT:                %s                      │\n", use_dht ? "ENABLED " : "DISABLED");
     printf("│ Rendezvous:         %s                      │\n", use_rendezvous ? "ENABLED " : "DISABLED");
+    printf("│ TURN:               %s                      │\n", use_turn ? "ENABLED " : "DISABLED");
+    printf("│ ICE:                %s                      │\n", use_ice ? "ENABLED " : "DISABLED");
     if (use_nat_traversal) {
         printf("│ STUN server:         %-30s │\n", stun_server);
     }
@@ -383,6 +409,40 @@ int main(int argc, char* argv[]) {
         const char* default_rendezvous_key = "/core/entrypoint/v1";
         for (int i = 0; i < num_nodes; i++) {
             rendezvous_join(nodes[i], default_rendezvous_key);
+        }
+    }
+    
+    // Initialize TURN for all nodes if enabled
+    if (use_turn) {
+        // TURNサーバーの設定（Google公開TURNサーバーを使用）
+        const char* turn_server = "turn.navigatorsguild.com";
+        const char* turn_username = "webrtc";
+        const char* turn_password = "webrtc";
+        
+        for (int i = 0; i < num_nodes; i++) {
+            if (turn_init(nodes[i], turn_server, TURN_DEFAULT_PORT, turn_username, turn_password) == 0) {
+                printf("Initialized TURN for node %d using server %s\n", nodes[i]->id, turn_server);
+                
+                // TURNアロケーションの要求
+                if (turn_allocate(nodes[i]) == 0) {
+                    printf("TURN allocation successful for node %d\n", nodes[i]->id);
+                } else {
+                    printf("TURN allocation failed for node %d\n", nodes[i]->id);
+                }
+            }
+        }
+    }
+    
+    // Initialize ICE for all nodes if enabled
+    if (use_ice) {
+        for (int i = 0; i < num_nodes; i++) {
+            if (ice_init(nodes[i]) == 0) {
+                printf("Initialized ICE for node %d\n", nodes[i]->id);
+                
+                // ICE候補の収集
+                int candidate_count = ice_gather_candidates(nodes[i]);
+                printf("Gathered %d ICE candidates for node %d\n", candidate_count, nodes[i]->id);
+            }
         }
     }
     
@@ -606,6 +666,52 @@ int main(int argc, char* argv[]) {
                         printf("  rendezvous find <key> - Find peers at a rendezvous point\n");
                     }
                 }
+            } else if (strncmp(cmd_buffer, "ice", 3) == 0) {
+                // ICE関連のコマンド
+                if (!use_ice) {
+                    printf("ICE is not enabled. Use -I option to enable it.\n");
+                } else {
+                    char *subcmd = cmd_buffer + 4; // "ice "の後の部分
+                    
+                    if (strncmp(subcmd, "status", 6) == 0) {
+                        // ICE接続状態の表示
+                        for (int i = 0; i < num_nodes; i++) {
+                            IceConnectionState state = ice_get_connection_state(nodes[i]);
+                            const char* state_str;
+                            
+                            switch (state) {
+                                case ICE_STATE_NEW:
+                                    state_str = "NEW";
+                                    break;
+                                case ICE_STATE_CHECKING:
+                                    state_str = "CHECKING";
+                                    break;
+                                case ICE_STATE_CONNECTED:
+                                    state_str = "CONNECTED";
+                                    break;
+                                case ICE_STATE_COMPLETED:
+                                    state_str = "COMPLETED";
+                                    break;
+                                case ICE_STATE_FAILED:
+                                    state_str = "FAILED";
+                                    break;
+                                case ICE_STATE_DISCONNECTED:
+                                    state_str = "DISCONNECTED";
+                                    break;
+                                case ICE_STATE_CLOSED:
+                                    state_str = "CLOSED";
+                                    break;
+                                default:
+                                    state_str = "UNKNOWN";
+                            }
+                            
+                            printf("Node %d ICE connection state: %s\n", nodes[i]->id, state_str);
+                        }
+                    } else {
+                        printf("Unknown ICE command. Available commands:\n");
+                        printf("  ice status - Show ICE connection status\n");
+                    }
+                }
             } else if (strcmp(cmd_buffer, "help") == 0) {
                 printf("Available commands:\n");
                 printf("  status       - Show status of all nodes\n");
@@ -617,6 +723,7 @@ int main(int argc, char* argv[]) {
                 printf("  rendezvous join <key> - Join a rendezvous point\n");
                 printf("  rendezvous leave <key> - Leave a rendezvous point\n");
                 printf("  rendezvous find <key> - Find peers at a rendezvous point\n");
+                printf("  ice status   - Show ICE connection status\n");
                 printf("  help         - Show this help message\n");
                 printf("  exit, quit   - Exit the program\n");
             } else if (strcmp(cmd_buffer, "exit") == 0 || strcmp(cmd_buffer, "quit") == 0) {

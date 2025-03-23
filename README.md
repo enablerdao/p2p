@@ -255,6 +255,9 @@ node_network.exe -n 5
 | `security.h/security.c` | メッセージ認証機能 |
 | `diagnostics.h/diagnostics.c` | ネットワーク診断機能 |
 | `dht.h/dht.c` | 分散ハッシュテーブル（DHT）の実装 |
+| `rendezvous.h/rendezvous.c` | ランデブーポイント機能の実装 |
+| `turn.h/turn.c` | TURNクライアント（リレーサーバー経由の通信） |
+| `ice.h/ice.c` | ICE（Interactive Connectivity Establishment）の実装 |
 | `main.c` | メインプログラム（ネットワーク初期化、CLI） |
 | `Makefile` | ビルド設定 |
 

@@ -52,6 +52,8 @@ typedef struct Node {
     pthread_mutex_t peers_mutex; // Mutex for thread-safe peer list access
     void* dht_data;             // DHT related data (opaque pointer)
     void* rendezvous_data;      // Rendezvous related data (opaque pointer)
+    void* turn_data;            // TURN related data (opaque pointer)
+    void* ice_data;             // ICE related data (opaque pointer)
 } Node;
 
 typedef struct {

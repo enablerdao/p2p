@@ -125,6 +125,16 @@ void destroy_node(Node* node) {
         node->rendezvous_data = NULL;
     }
     
+    if (node->turn_data) {
+        free(node->turn_data);
+        node->turn_data = NULL;
+    }
+    
+    if (node->ice_data) {
+        free(node->ice_data);
+        node->ice_data = NULL;
+    }
+    
     // Free memory
     free(node);
     
