@@ -14,14 +14,13 @@
 #include <netdb.h>
 #include <time.h>
 
-// Forward declaration for firewall.h
-struct Node;
-typedef struct Node Node;
-
 #define MAX_NODES 100
 #define MAX_BUFFER 1024
 #define BASE_PORT 8000
 #define MAX_IP_STR_LEN 40  // Support for IPv6 addresses
+
+// Forward declaration for circular dependencies
+struct Node;
 
 // Structure to hold node connection information
 typedef struct {
@@ -34,7 +33,7 @@ typedef struct {
     int public_port;            // Public port (if behind NAT)
 } NodeInfo;
 
-typedef struct {
+typedef struct Node {
     int id;                     // Node ID
     int socket_fd;              // Socket file descriptor
     struct sockaddr_in addr;    // Socket address

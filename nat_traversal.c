@@ -1,6 +1,7 @@
 #include "node.h"
 #include "stun.h"
 #include "upnp.h"
+#include "firewall.h"
 
 // Enable NAT traversal for a node
 int node_enable_nat_traversal(Node* node, const char* stun_server) {

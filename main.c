@@ -257,16 +257,18 @@ int main(int argc, char* argv[]) {
                 disable_firewall_bypass = true;
                 break;
             case 'd':  // ディスカバリーサーバーを指定
-                char *server = strtok(optarg, ":");
-                char *port_str = strtok(NULL, ":");
-                
-                if (server) {
-                    strncpy(discovery_server, server, sizeof(discovery_server) - 1);
-                    discovery_server[sizeof(discovery_server) - 1] = '\0';
-                }
-                
-                if (port_str) {
-                    discovery_port = atoi(port_str);
+                {
+                    char *server = strtok(optarg, ":");
+                    char *port_str = strtok(NULL, ":");
+                    
+                    if (server) {
+                        strncpy(discovery_server, server, sizeof(discovery_server) - 1);
+                        discovery_server[sizeof(discovery_server) - 1] = '\0';
+                    }
+                    
+                    if (port_str) {
+                        discovery_port = atoi(port_str);
+                    }
                 }
                 break;
             case 's':
