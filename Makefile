@@ -2,9 +2,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra -pthread
 LDFLAGS = -pthread
 
-SRCS = main.c node.c stun.c upnp.c discovery.c nat_traversal.c
+SRCS = main.c node.c stun.c upnp.c discovery.c nat_traversal.c firewall.c reliability.c security.c diagnostics.c
 OBJS = $(SRCS:.c=.o)
-HDRS = node.h stun.h upnp.h discovery.h
+HDRS = node.h stun.h upnp.h discovery.h firewall.h reliability.h security.h diagnostics.h
 
 all: node_network
 

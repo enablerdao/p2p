@@ -75,7 +75,14 @@ Node* create_node(int id, const char* ip, int port) {
         free(node);
         return NULL;
     }
-
+    
+    // Enable socket reuse
+    int reuse = 1;
+    if (setsockopt(node->socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+        perror("Failed to set SO_REUSEADDR");
+        // Not fatal, continue
+    }
+    
     // Set up address
     memset(&node->addr, 0, sizeof(node->addr));
     node->addr.sin_family = AF_INET;
@@ -84,10 +91,21 @@ Node* create_node(int id, const char* ip, int port) {
 
     // Bind socket
     if (bind(node->socket_fd, (struct sockaddr*)&node->addr, sizeof(node->addr)) < 0) {
-        perror("Failed to bind socket");
-        close(node->socket_fd);
-        free(node);
-        return NULL;
+        // If binding fails, try firewall-friendly ports if firewall bypass is enabled
+        if (node->firewall_bypass) {
+            int new_port = try_firewall_friendly_ports(node, port == 0 ? BASE_PORT + id : port);
+            if (new_port < 0) {
+                perror("Failed to bind socket to any port");
+                close(node->socket_fd);
+                free(node);
+                return NULL;
+            }
+        } else {
+            perror("Failed to bind socket");
+            close(node->socket_fd);
+            free(node);
+            return NULL;
+        }
     }
 
     // Start receive thread

@@ -14,6 +14,10 @@
 #include <netdb.h>
 #include <time.h>
 
+// Forward declaration for firewall.h
+struct Node;
+typedef struct Node Node;
+
 #define MAX_NODES 100
 #define MAX_BUFFER 1024
 #define BASE_PORT 8000
@@ -42,6 +46,7 @@ typedef struct {
     bool is_behind_nat;         // Whether this node is behind NAT
     bool use_upnp;              // Whether to use UPnP for port forwarding
     bool use_discovery;         // Whether to use automatic peer discovery
+    bool firewall_bypass;       // Whether to use firewall bypass techniques
     NodeInfo peers[MAX_NODES];  // Information about peer nodes
     int peer_count;             // Number of connected peers
     pthread_mutex_t peers_mutex; // Mutex for thread-safe peer list access

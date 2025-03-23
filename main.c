@@ -2,8 +2,13 @@
 #include "stun.h"
 #include "upnp.h"
 #include "discovery.h"
+#include "firewall.h"
+#include "reliability.h"
+#include "security.h"
+#include "diagnostics.h"
 #include <signal.h>
 #include <getopt.h>
+#include <fcntl.h>
 
 Node* nodes[MAX_NODES];
 int num_nodes = 0;
@@ -16,7 +21,7 @@ void handle_signal(int sig) {
 }
 
 // Initialize the network with a specified number of nodes
-void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_discovery, const char* stun_server) {
+void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_discovery, bool use_firewall_bypass, const char* stun_server) {
     if (count > MAX_NODES) {
         printf("Warning: Maximum number of nodes is %d. Using that instead.\n", MAX_NODES);
         count = MAX_NODES;
@@ -42,9 +47,10 @@ void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_dis
         // Initialize mutex
         pthread_mutex_init(&nodes[i]->peers_mutex, NULL);
         
-        // Set NAT traversal options
+        // Set options
         nodes[i]->use_upnp = use_upnp;
         nodes[i]->use_discovery = use_discovery;
+        nodes[i]->firewall_bypass = use_firewall_bypass;
         
         // Enable NAT traversal if requested
         if (use_nat_traversal) {
@@ -83,6 +89,11 @@ void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_dis
         for (int i = 0; i < num_nodes; i++) {
             discovery_init(nodes[i]);
         }
+    }
+    
+    // Start reliability service for all nodes
+    for (int i = 0; i < num_nodes; i++) {
+        start_reliability_service(nodes[i]);
     }
 
     printf("Network initialized with %d nodes\n", num_nodes);
@@ -147,19 +158,26 @@ void print_usage(const char* program_name) {
     printf("Usage: %s [options]\n", program_name);
     printf("Options:\n");
     printf("  -n COUNT       Number of nodes to create (default: 10)\n");
-    printf("  -t             Enable NAT traversal using STUN\n");
-    printf("  -u             Enable UPnP port forwarding\n");
-    printf("  -d             Enable automatic peer discovery\n");
-    printf("  -s SERVER      STUN server to use (default: stun.l.google.com:19302)\n");
+    printf("  -T             Disable NAT traversal (enabled by default)\n");
+    printf("  -U             Disable UPnP port forwarding (enabled by default)\n");
+    printf("  -D             Disable automatic peer discovery (enabled by default)\n");
+    printf("  -s SERVER      STUN server to use (default: stun.l.google.com)\n");
     printf("  -p PEER        Add a remote peer (format: id:ip:port)\n");
+    printf("  -f             Enable firewall bypass mode (tries multiple ports)\n");
     printf("  -h             Display this help message\n");
+    printf("\nAll features (NAT traversal, UPnP, peer discovery) are enabled by default.\n");
+    printf("Use capital letters to disable features (e.g., -T to disable NAT traversal).\n");
 }
 
 int main(int argc, char* argv[]) {
     int node_count = 10;
-    bool use_nat_traversal = false;
-    bool use_upnp = false;
-    bool use_discovery = false;
+    bool use_nat_traversal = true;  // デフォルトで有効化
+    bool use_upnp = true;           // デフォルトで有効化
+    bool use_discovery = true;      // デフォルトで有効化
+    bool use_firewall_bypass = false; // デフォルトでは無効
+    bool disable_nat_traversal = false;
+    bool disable_upnp = false;
+    bool disable_discovery = false;
     char stun_server[256] = "stun.l.google.com";
     int opt;
     
@@ -172,7 +190,7 @@ int main(int argc, char* argv[]) {
     int remote_peer_count = 0;
     
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "n:tuds:p:h")) != -1) {
+    while ((opt = getopt(argc, argv, "n:TUDs:p:hf")) != -1) {
         switch (opt) {
             case 'n':
                 node_count = atoi(optarg);
@@ -181,14 +199,14 @@ int main(int argc, char* argv[]) {
                     return 1;
                 }
                 break;
-            case 't':
-                use_nat_traversal = true;
+            case 'T':  // 大文字は無効化を意味する
+                disable_nat_traversal = true;
                 break;
-            case 'u':
-                use_upnp = true;
+            case 'U':
+                disable_upnp = true;
                 break;
-            case 'd':
-                use_discovery = true;
+            case 'D':
+                disable_discovery = true;
                 break;
             case 's':
                 strncpy(stun_server, optarg, sizeof(stun_server) - 1);
@@ -206,6 +224,10 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 break;
+            case 'f':  // ファイアウォール対策モード
+                use_firewall_bypass = true;
+                printf("Firewall bypass mode enabled. Will try multiple ports.\n");
+                break;
             case 'h':
                 print_usage(argv[0]);
                 return 0;
@@ -214,6 +236,11 @@ int main(int argc, char* argv[]) {
                 return 1;
         }
     }
+    
+    // 無効化フラグが設定されていれば機能をオフにする
+    if (disable_nat_traversal) use_nat_traversal = false;
+    if (disable_upnp) use_upnp = false;
+    if (disable_discovery) use_discovery = false;
     
     // Set up signal handler
     signal(SIGINT, handle_signal);
@@ -227,7 +254,7 @@ int main(int argc, char* argv[]) {
     }
     
     // Initialize network
-    init_network(node_count, use_nat_traversal, use_upnp, use_discovery, stun_server);
+    init_network(node_count, use_nat_traversal, use_upnp, use_discovery, use_firewall_bypass, stun_server);
     
     // Add remote peers if specified
     if (remote_peer_count > 0) {
@@ -262,16 +289,59 @@ int main(int argc, char* argv[]) {
         }
     }
     
+    // Run diagnostics
+    if (num_nodes > 0) {
+        run_network_diagnostics(nodes[0]);
+    }
+    
     // Run demo messaging
     demo_messaging();
     
     // Keep running until signal received
     printf("Network running. Press Ctrl+C to exit.\n");
+    printf("Type 'status' to see network status, 'ping <id>' to ping a node, or 'help' for more commands.\n");
     
     time_t last_maintenance = time(NULL);
     
+    // Set up stdin for non-blocking reads
+    int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+    
+    char cmd_buffer[256];
+    
     while (running) {
-        sleep(1);
+        // Check for user commands
+        if (fgets(cmd_buffer, sizeof(cmd_buffer), stdin) != NULL) {
+            cmd_buffer[strcspn(cmd_buffer, "\n")] = 0; // Remove newline
+            
+            if (strcmp(cmd_buffer, "status") == 0) {
+                // Show status of all nodes
+                for (int i = 0; i < num_nodes; i++) {
+                    print_node_status(nodes[i]);
+                    print_peer_status(nodes[i]);
+                }
+            } else if (strncmp(cmd_buffer, "ping ", 5) == 0) {
+                // Ping a specific node
+                int peer_id = atoi(cmd_buffer + 5);
+                if (num_nodes > 0) {
+                    ping_peer(nodes[0], peer_id, PING_TIMEOUT);
+                }
+            } else if (strcmp(cmd_buffer, "diag") == 0 || strcmp(cmd_buffer, "diagnostics") == 0) {
+                // Run diagnostics
+                if (num_nodes > 0) {
+                    run_network_diagnostics(nodes[0]);
+                }
+            } else if (strcmp(cmd_buffer, "help") == 0) {
+                printf("Available commands:\n");
+                printf("  status       - Show status of all nodes\n");
+                printf("  ping <id>    - Ping a specific node\n");
+                printf("  diag         - Run network diagnostics\n");
+                printf("  help         - Show this help message\n");
+                printf("  exit         - Exit the program\n");
+            } else if (strcmp(cmd_buffer, "exit") == 0 || strcmp(cmd_buffer, "quit") == 0) {
+                running = 0;
+            }
+        }
         
         // Perform maintenance every 60 seconds
         time_t now = time(NULL);
@@ -279,6 +349,8 @@ int main(int argc, char* argv[]) {
             maintain_network();
             last_maintenance = now;
         }
+        
+        usleep(100000); // 100ms
     }
     
     // Clean up
