@@ -66,6 +66,11 @@ int enhanced_discovery_init(Node* node) {
                 continue;
             }
             
+            // Skip interfaces that are not up or running
+            if (!(ifa->ifa_flags & IFF_UP) || !(ifa->ifa_flags & IFF_RUNNING)) {
+                continue;
+            }
+            
             struct ip_mreq mreq;
             mreq.imr_multiaddr.s_addr = inet_addr(ENHANCED_MULTICAST_ADDR);
             mreq.imr_interface.s_addr = ((struct sockaddr_in*)ifa->ifa_addr)->sin_addr.s_addr;
@@ -245,6 +250,15 @@ void* enhanced_discovery_thread(void* arg) {
         perror("Failed to set SO_RCVTIMEO");
     }
     
+    // Set SO_REUSEPORT for macOS compatibility
+#ifdef SO_REUSEPORT
+    int reuseport = 1;
+    if (setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEPORT, &reuseport, sizeof(reuseport)) < 0) {
+        perror("Failed to set SO_REUSEPORT");
+        // Not fatal, continue
+    }
+#endif
+    
     EnhancedDiscoveryMessage msg;
     struct sockaddr_in sender_addr;
     socklen_t sender_len = sizeof(sender_addr);
@@ -277,6 +291,39 @@ void* enhanced_discovery_thread(void* arg) {
         if (bytes < 0) {
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
                 perror("Error receiving discovery message");
+                
+                // On macOS, sometimes the socket can become invalid
+                // Try to recreate the socket if this happens
+                if (errno == EBADF) {
+                    printf("Attempting to recreate discovery socket...\n");
+                    close(discovery_socket);
+                    
+                    // Recreate socket
+                    discovery_socket = socket(AF_INET, SOCK_DGRAM, 0);
+                    if (discovery_socket < 0) {
+                        perror("Failed to recreate discovery socket");
+                        continue;
+                    }
+                    
+                    // Enable address reuse
+                    int reuse = 1;
+                    if (setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+                        perror("Failed to set SO_REUSEADDR");
+                    }
+                    
+                    // Set timeout
+                    if (setsockopt(discovery_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+                        perror("Failed to set SO_RCVTIMEO");
+                    }
+                    
+                    // Rebind
+                    if (bind(discovery_socket, (struct sockaddr*)&multicast_addr, sizeof(multicast_addr)) < 0) {
+                        perror("Failed to rebind discovery socket");
+                        continue;
+                    }
+                    
+                    printf("Discovery socket recreated successfully\n");
+                }
             }
             // Timeout or error, continue
             continue;

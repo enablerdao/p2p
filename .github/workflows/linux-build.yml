@@ -1,0 +1,38 @@
+name: Linux Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # 手動実行用
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+        
+    - name: Build
+      run: |
+        make
+        
+    - name: Test basic functionality
+      run: |
+        # 基本的な機能テスト
+        ./node_network -n 1 -T -U -D -E -F &
+        PID=$!
+        sleep 5
+        kill $PID || true
+        
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: node_network-linux
+        path: node_network

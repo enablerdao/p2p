@@ -1,5 +1,8 @@
 # C ノードネットワーク
 
+[![macOS Build and Test](https://github.com/enablerdao/p2p/actions/workflows/macos-build.yml/badge.svg)](https://github.com/enablerdao/p2p/actions/workflows/macos-build.yml)
+[![Linux Build and Test](https://github.com/enablerdao/p2p/actions/workflows/linux-build.yml/badge.svg)](https://github.com/enablerdao/p2p/actions/workflows/linux-build.yml)
+
 これはCで実装されたP2Pノードネットワークで、複数のノードがそれぞれのノードIDを使って互いに通信することができます。NAT越えの機能を備えており、異なるネットワーク上のコンピュータ間でも自動的に通信が可能です。Linux、macOS、Windowsで動作します。
 
 ## 特徴
