@@ -1,4 +1,5 @@
 #include "enhanced_discovery.h"
+#include "firewall.h"
 #include <time.h>
 #include <errno.h>
 

@@ -1,4 +1,5 @@
 #include "discovery_server.h"
+#include "firewall.h"
 
 static pthread_t discovery_thread_id;
 static bool discovery_running = false;

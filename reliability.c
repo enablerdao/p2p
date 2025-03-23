@@ -1,4 +1,5 @@
 #include "reliability.h"
+#include "firewall.h"
 
 static pthread_t reliability_thread_id;
 static bool reliability_running = false;
