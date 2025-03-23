@@ -71,6 +71,29 @@ int enhanced_discovery_init(Node* node) {
                 continue;
             }
             
+            // For macOS, we need to set IP_MULTICAST_IF first
+            struct in_addr localInterface;
+            localInterface.s_addr = ((struct sockaddr_in*)ifa->ifa_addr)->sin_addr.s_addr;
+            if (setsockopt(discovery_socket, IPPROTO_IP, IP_MULTICAST_IF, &localInterface, sizeof(localInterface)) < 0) {
+                printf("Warning: Failed to set IP_MULTICAST_IF on interface %s: %s\n", 
+                       ifa->ifa_name, strerror(errno));
+                // Not fatal, continue
+            }
+            
+            // Set multicast TTL
+            unsigned char ttl = ENHANCED_DISCOVERY_TTL;
+            if (setsockopt(discovery_socket, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
+                printf("Warning: Failed to set IP_MULTICAST_TTL: %s\n", strerror(errno));
+                // Not fatal, continue
+            }
+            
+            // Enable loopback so we can receive our own packets
+            unsigned char loop = 1;
+            if (setsockopt(discovery_socket, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) < 0) {
+                printf("Warning: Failed to set IP_MULTICAST_LOOP: %s\n", strerror(errno));
+                // Not fatal, continue
+            }
+            
             struct ip_mreq mreq;
             mreq.imr_multiaddr.s_addr = inet_addr(ENHANCED_MULTICAST_ADDR);
             mreq.imr_interface.s_addr = ((struct sockaddr_in*)ifa->ifa_addr)->sin_addr.s_addr;
@@ -128,6 +151,46 @@ int enhanced_discovery_send_announcement(Node* node) {
     msg.timestamp = (uint32_t)time(NULL);
     msg.sequence = ++sequence_counter;
     
+    // For macOS, we need to ensure the socket is valid
+    if (discovery_socket < 0) {
+        printf("Discovery socket is invalid, recreating...\n");
+        
+        // Recreate socket
+        discovery_socket = socket(AF_INET, SOCK_DGRAM, 0);
+        if (discovery_socket < 0) {
+            perror("Failed to recreate discovery socket");
+            return -1;
+        }
+        
+        // Enable address reuse
+        int reuse = 1;
+        if (setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+            perror("Failed to set SO_REUSEADDR");
+        }
+        
+#ifdef SO_REUSEPORT
+        // Set SO_REUSEPORT for macOS compatibility
+        int reuseport = 1;
+        if (setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEPORT, &reuseport, sizeof(reuseport)) < 0) {
+            perror("Failed to set SO_REUSEPORT");
+        }
+#endif
+        
+        // Rebind to discovery port
+        struct sockaddr_in bind_addr;
+        memset(&bind_addr, 0, sizeof(bind_addr));
+        bind_addr.sin_family = AF_INET;
+        bind_addr.sin_addr.s_addr = INADDR_ANY;
+        bind_addr.sin_port = htons(ENHANCED_DISCOVERY_PORT);
+        
+        if (bind(discovery_socket, (struct sockaddr*)&bind_addr, sizeof(bind_addr)) < 0) {
+            perror("Failed to rebind discovery socket");
+            return -1;
+        }
+        
+        printf("Discovery socket recreated successfully\n");
+    }
+    
     if (sendto(discovery_socket, &msg, sizeof(msg), 0, 
                (struct sockaddr*)&multicast_addr, sizeof(multicast_addr)) < 0) {
         perror("Failed to send discovery announcement");
@@ -160,6 +223,46 @@ int enhanced_discovery_send_query(Node* node) {
     
     msg.timestamp = (uint32_t)time(NULL);
     msg.sequence = ++sequence_counter;
+    
+    // For macOS, we need to ensure the socket is valid
+    if (discovery_socket < 0) {
+        printf("Discovery socket is invalid, recreating...\n");
+        
+        // Recreate socket
+        discovery_socket = socket(AF_INET, SOCK_DGRAM, 0);
+        if (discovery_socket < 0) {
+            perror("Failed to recreate discovery socket");
+            return -1;
+        }
+        
+        // Enable address reuse
+        int reuse = 1;
+        if (setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+            perror("Failed to set SO_REUSEADDR");
+        }
+        
+#ifdef SO_REUSEPORT
+        // Set SO_REUSEPORT for macOS compatibility
+        int reuseport = 1;
+        if (setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEPORT, &reuseport, sizeof(reuseport)) < 0) {
+            perror("Failed to set SO_REUSEPORT");
+        }
+#endif
+        
+        // Rebind to discovery port
+        struct sockaddr_in bind_addr;
+        memset(&bind_addr, 0, sizeof(bind_addr));
+        bind_addr.sin_family = AF_INET;
+        bind_addr.sin_addr.s_addr = INADDR_ANY;
+        bind_addr.sin_port = htons(ENHANCED_DISCOVERY_PORT);
+        
+        if (bind(discovery_socket, (struct sockaddr*)&bind_addr, sizeof(bind_addr)) < 0) {
+            perror("Failed to rebind discovery socket");
+            return -1;
+        }
+        
+        printf("Discovery socket recreated successfully\n");
+    }
     
     if (sendto(discovery_socket, &msg, sizeof(msg), 0, 
                (struct sockaddr*)&multicast_addr, sizeof(multicast_addr)) < 0) {
