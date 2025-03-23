@@ -38,5 +38,9 @@ jobs:
 
           .PHONY: all clean
           MAKEFILEEOF
+      - name: Debug
+        run: |
+          ls -la
+          cat Makefile
       - name: Build
-        run: make
+        run: make VERBOSE=1
