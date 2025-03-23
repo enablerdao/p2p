@@ -12,17 +12,22 @@
 #include <stdbool.h>
 #include <ifaddrs.h>
 #include <netdb.h>
+#include <time.h>
 
-#define MAX_NODES 10
+#define MAX_NODES 100
 #define MAX_BUFFER 1024
 #define BASE_PORT 8000
-#define MAX_IP_STR_LEN 16  // "xxx.xxx.xxx.xxx\0"
+#define MAX_IP_STR_LEN 40  // Support for IPv6 addresses
 
 // Structure to hold node connection information
 typedef struct {
     int id;                     // Node ID
     char ip[MAX_IP_STR_LEN];    // IP address as string
     int port;                   // Port number
+    time_t last_seen;           // Last time this peer was seen
+    bool is_public;             // Whether this peer is publicly accessible
+    char public_ip[MAX_IP_STR_LEN]; // Public IP address (if behind NAT)
+    int public_port;            // Public port (if behind NAT)
 } NodeInfo;
 
 typedef struct {
@@ -31,9 +36,15 @@ typedef struct {
     struct sockaddr_in addr;    // Socket address
     pthread_t recv_thread;      // Thread for receiving messages
     bool is_running;            // Flag to control thread execution
-    char ip[MAX_IP_STR_LEN];    // IP address of this node
+    char ip[MAX_IP_STR_LEN];    // Local IP address of this node
+    char public_ip[MAX_IP_STR_LEN]; // Public IP address (if behind NAT)
+    int public_port;            // Public port (if behind NAT)
+    bool is_behind_nat;         // Whether this node is behind NAT
+    bool use_upnp;              // Whether to use UPnP for port forwarding
+    bool use_discovery;         // Whether to use automatic peer discovery
     NodeInfo peers[MAX_NODES];  // Information about peer nodes
     int peer_count;             // Number of connected peers
+    pthread_mutex_t peers_mutex; // Mutex for thread-safe peer list access
 } Node;
 
 typedef struct {
@@ -42,14 +53,37 @@ typedef struct {
     char data[MAX_BUFFER];      // Message data
 } Message;
 
+// Message types for node protocol
+#define MSG_TYPE_DATA 0
+#define MSG_TYPE_PING 1
+#define MSG_TYPE_PONG 2
+#define MSG_TYPE_PEER_LIST 3
+#define MSG_TYPE_NAT_TRAVERSAL 4
+
+typedef struct {
+    uint8_t type;               // Message type
+    uint32_t seq;               // Sequence number
+    int from_id;                // Sender node ID
+    int to_id;                  // Recipient node ID
+    uint16_t data_len;          // Length of data
+    char data[MAX_BUFFER];      // Message data
+} ProtocolMessage;
+
 // Function prototypes
 Node* create_node(int id, const char* ip, int port);
 void destroy_node(Node* node);
 int add_peer(Node* node, int peer_id, const char* peer_ip, int peer_port);
+int remove_peer(Node* node, int peer_id);
 int connect_to_node(Node* from_node, int to_id);
 int send_message(Node* from_node, int to_id, const char* data);
+int send_protocol_message(Node* from_node, int to_id, uint8_t type, const char* data, uint16_t data_len);
 void* receive_messages(void* arg);
 void print_message(const Message* msg);
 char* get_local_ip();
+int node_enable_nat_traversal(Node* node, const char* stun_server);
+int node_enable_upnp(Node* node);
+int node_enable_discovery(Node* node);
+void node_maintain_peers(Node* node);
+void node_share_peer_list(Node* node, int to_id);
 
 #endif /* NODE_H */

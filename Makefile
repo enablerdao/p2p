@@ -2,18 +2,19 @@ CC = gcc
 CFLAGS = -Wall -Wextra -pthread
 LDFLAGS = -pthread
 
+SRCS = main.c node.c stun.c upnp.c discovery.c nat_traversal.c
+OBJS = $(SRCS:.c=.o)
+HDRS = node.h stun.h upnp.h discovery.h
+
 all: node_network
 
-node_network: main.o node.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+node_network: $(OBJS)
+        $(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-main.o: main.c node.h
-	$(CC) $(CFLAGS) -c $<
-
-node.o: node.c node.h
-	$(CC) $(CFLAGS) -c $<
+%.o: %.c $(HDRS)
+        $(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f node_network *.o
+        rm -f node_network *.o
 
 .PHONY: all clean
