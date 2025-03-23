@@ -90,5 +90,6 @@ int node_enable_upnp(Node* node);
 int node_enable_discovery(Node* node);
 void node_maintain_peers(Node* node);
 void node_share_peer_list(Node* node, int to_id);
+int node_punch_hole(Node* from_node, NodeInfo* peer);
 
 #endif /* NODE_H */

@@ -18,6 +18,7 @@ volatile sig_atomic_t running = 1;
 
 // Signal handler for graceful shutdown
 void handle_signal(int sig) {
+    (void)sig; // 未使用パラメータの警告を抑制
     printf("\nShutting down...\n");
     running = 0;
 }
