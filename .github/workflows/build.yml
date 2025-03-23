@@ -18,30 +18,13 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libssl-dev
     
-    - name: Create Makefile
+    - name: Fix Makefile
       run: |
-        cat > Makefile << 'MAKEFILEEOF'
-CC = gcc
-CFLAGS = -Wall -Wextra -pthread
-LDFLAGS = -pthread -lcrypto
-
-SRCS = main.c node.c stun.c upnp.c discovery.c discovery_server.c enhanced_discovery.c nat_traversal.c firewall.c reliability.c security.c diagnostics.c dht.c rendezvous.c turn.c ice.c
-OBJS = $(SRCS:.c=.o)
-HDRS = node.h stun.h upnp.h discovery.h discovery_server.h enhanced_discovery.h firewall.h reliability.h security.h diagnostics.h dht.h rendezvous.h turn.h ice.h
-
-all: node_network
-
-node_network: $(OBJS)
-$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
-%.o: %.c $(HDRS)
-$(CC) $(CFLAGS) -c $<
-
-clean:
-rm -f node_network *.o
-
-.PHONY: all clean
-MAKEFILEEOF
+        sed -i 's/^node_network:/\tnode_network:/' Makefile
+        sed -i 's/^%.o:/\t%.o:/' Makefile
+        sed -i 's/^clean:/\tclean:/' Makefile
+        sed -i 's/^rm -f/\trm -f/' Makefile
+        sed -i 's/^$(CC)/\t$(CC)/' Makefile
     
     - name: Build
       run: make
@@ -75,30 +58,13 @@ MAKEFILEEOF
       run: |
         brew install openssl@3
     
-    - name: Create Makefile
+    - name: Fix Makefile
       run: |
-        cat > Makefile << 'MAKEFILEEOF'
-CC = gcc
-CFLAGS = -Wall -Wextra -I/usr/local/opt/openssl@3/include
-LDFLAGS = -L/usr/local/opt/openssl@3/lib -lcrypto
-
-SRCS = main.c node.c stun.c upnp.c discovery.c discovery_server.c enhanced_discovery.c nat_traversal.c firewall.c reliability.c security.c diagnostics.c dht.c rendezvous.c turn.c ice.c
-OBJS = $(SRCS:.c=.o)
-HDRS = node.h stun.h upnp.h discovery.h discovery_server.h enhanced_discovery.h firewall.h reliability.h security.h diagnostics.h dht.h rendezvous.h turn.h ice.h
-
-all: node_network
-
-node_network: $(OBJS)
-$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
-%.o: %.c $(HDRS)
-$(CC) $(CFLAGS) -c $<
-
-clean:
-rm -f node_network *.o
-
-.PHONY: all clean
-MAKEFILEEOF
+        sed -i '' 's/^node_network:/node_network:/' Makefile
+        sed -i '' 's/^%.o:/%.o:/' Makefile
+        sed -i '' 's/^clean:/clean:/' Makefile
+        sed -i '' 's/^rm -f/rm -f/' Makefile
+        sed -i '' 's/^$(CC)/$(CC)/' Makefile
     
     - name: Build
       run: |
