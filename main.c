@@ -161,12 +161,20 @@ void print_usage(const char* program_name) {
     printf("  -T             Disable NAT traversal (enabled by default)\n");
     printf("  -U             Disable UPnP port forwarding (enabled by default)\n");
     printf("  -D             Disable automatic peer discovery (enabled by default)\n");
+    printf("  -F             Disable firewall bypass mode (enabled by default)\n");
     printf("  -s SERVER      STUN server to use (default: stun.l.google.com)\n");
     printf("  -p PEER        Add a remote peer (format: id:ip:port)\n");
-    printf("  -f             Enable firewall bypass mode (tries multiple ports)\n");
+    printf("  -f             Explicitly enable firewall bypass mode (enabled by default)\n");
     printf("  -h             Display this help message\n");
-    printf("\nAll features (NAT traversal, UPnP, peer discovery) are enabled by default.\n");
+    printf("\nAll features (NAT traversal, UPnP, peer discovery, firewall bypass) are enabled by default.\n");
     printf("Use capital letters to disable features (e.g., -T to disable NAT traversal).\n");
+    printf("\nInteractive commands available during runtime:\n");
+    printf("  status         Show status of all nodes\n");
+    printf("  ping <id>      Ping a specific node\n");
+    printf("  send <id> <msg> Send a message to a specific node\n");
+    printf("  diag           Run network diagnostics\n");
+    printf("  help           Show help message\n");
+    printf("  exit           Exit the program\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -174,10 +182,11 @@ int main(int argc, char* argv[]) {
     bool use_nat_traversal = true;  // デフォルトで有効化
     bool use_upnp = true;           // デフォルトで有効化
     bool use_discovery = true;      // デフォルトで有効化
-    bool use_firewall_bypass = false; // デフォルトでは無効
+    bool use_firewall_bypass = true; // デフォルトで有効化
     bool disable_nat_traversal = false;
     bool disable_upnp = false;
     bool disable_discovery = false;
+    bool disable_firewall_bypass = false;
     char stun_server[256] = "stun.l.google.com";
     int opt;
     
@@ -190,7 +199,7 @@ int main(int argc, char* argv[]) {
     int remote_peer_count = 0;
     
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "n:TUDs:p:hf")) != -1) {
+    while ((opt = getopt(argc, argv, "n:TUDFs:p:hf")) != -1) {
         switch (opt) {
             case 'n':
                 node_count = atoi(optarg);
@@ -208,6 +217,9 @@ int main(int argc, char* argv[]) {
             case 'D':
                 disable_discovery = true;
                 break;
+            case 'F':  // ファイアウォール対策を無効化
+                disable_firewall_bypass = true;
+                break;
             case 's':
                 strncpy(stun_server, optarg, sizeof(stun_server) - 1);
                 stun_server[sizeof(stun_server) - 1] = '\0';
@@ -224,7 +236,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 break;
-            case 'f':  // ファイアウォール対策モード
+            case 'f':  // ファイアウォール対策モードを明示的に有効化（デフォルトでも有効）
                 use_firewall_bypass = true;
                 printf("Firewall bypass mode enabled. Will try multiple ports.\n");
                 break;
@@ -241,6 +253,7 @@ int main(int argc, char* argv[]) {
     if (disable_nat_traversal) use_nat_traversal = false;
     if (disable_upnp) use_upnp = false;
     if (disable_discovery) use_discovery = false;
+    if (disable_firewall_bypass) use_firewall_bypass = false;
     
     // Set up signal handler
     signal(SIGINT, handle_signal);
@@ -298,8 +311,15 @@ int main(int argc, char* argv[]) {
     demo_messaging();
     
     // Keep running until signal received
-    printf("Network running. Press Ctrl+C to exit.\n");
-    printf("Type 'status' to see network status, 'ping <id>' to ping a node, or 'help' for more commands.\n");
+    printf("\n=== Network running. Press Ctrl+C to exit. ===\n");
+    printf("Available commands:\n");
+    printf("  status       - Show status of all nodes\n");
+    printf("  list, nodes  - List all nodes and peers\n");
+    printf("  ping <id>    - Ping a specific node\n");
+    printf("  send <id> <message> - Send a message to a specific node\n");
+    printf("  diag         - Run network diagnostics\n");
+    printf("  help         - Show help message\n");
+    printf("  exit, quit   - Exit the program\n");
     
     time_t last_maintenance = time(NULL);
     
@@ -326,6 +346,41 @@ int main(int argc, char* argv[]) {
                 if (num_nodes > 0) {
                     ping_peer(nodes[0], peer_id, PING_TIMEOUT);
                 }
+            } else if (strncmp(cmd_buffer, "send ", 5) == 0) {
+                // Send a message to a specific node
+                char *id_str = cmd_buffer + 5;
+                char *msg = strchr(id_str, ' ');
+                
+                if (msg) {
+                    *msg = '\0'; // Split the string
+                    msg++; // Move to the message content
+                    
+                    int peer_id = atoi(id_str);
+                    if (num_nodes > 0 && strlen(msg) > 0) {
+                        printf("Sending message to node %d: %s\n", peer_id, msg);
+                        if (send_message(nodes[0], peer_id, msg) == 0) {
+                            printf("Message sent successfully\n");
+                        } else {
+                            printf("Failed to send message\n");
+                        }
+                    } else {
+                        printf("Invalid node ID or empty message\n");
+                    }
+                } else {
+                    printf("Usage: send <id> <message>\n");
+                }
+            } else if (strcmp(cmd_buffer, "list") == 0 || strcmp(cmd_buffer, "nodes") == 0) {
+                // List all nodes
+                printf("Local nodes:\n");
+                for (int i = 0; i < num_nodes; i++) {
+                    printf("  Node %d: %s:%d\n", nodes[i]->id, nodes[i]->ip, 
+                           ntohs(nodes[i]->addr.sin_port));
+                }
+                
+                // List all known remote peers
+                if (num_nodes > 0) {
+                    print_peer_status(nodes[0]);
+                }
             } else if (strcmp(cmd_buffer, "diag") == 0 || strcmp(cmd_buffer, "diagnostics") == 0) {
                 // Run diagnostics
                 if (num_nodes > 0) {
@@ -334,12 +389,17 @@ int main(int argc, char* argv[]) {
             } else if (strcmp(cmd_buffer, "help") == 0) {
                 printf("Available commands:\n");
                 printf("  status       - Show status of all nodes\n");
+                printf("  list, nodes  - List all nodes and peers\n");
                 printf("  ping <id>    - Ping a specific node\n");
+                printf("  send <id> <message> - Send a message to a specific node\n");
                 printf("  diag         - Run network diagnostics\n");
                 printf("  help         - Show this help message\n");
-                printf("  exit         - Exit the program\n");
+                printf("  exit, quit   - Exit the program\n");
             } else if (strcmp(cmd_buffer, "exit") == 0 || strcmp(cmd_buffer, "quit") == 0) {
                 running = 0;
+            } else if (strlen(cmd_buffer) > 0) {
+                printf("Unknown command: %s\n", cmd_buffer);
+                printf("Type 'help' for available commands\n");
             }
         }
         
