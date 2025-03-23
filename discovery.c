@@ -1,4 +1,5 @@
 #include "discovery.h"
+#include <errno.h>
 
 static int discovery_socket = -1;
 static pthread_t discovery_thread_id;

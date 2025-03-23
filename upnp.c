@@ -1,4 +1,5 @@
 #include "upnp.h"
+#include <errno.h>
 
 // Simple UPnP implementation using SSDP discovery and SOAP requests
 // Note: This is a simplified implementation. For production use, consider using libupnp or miniupnpc

@@ -1,4 +1,5 @@
 #include "security.h"
+#include <time.h>
 
 // Simple HMAC implementation (for demonstration purposes)
 // In a real application, use a cryptographic library like OpenSSL
