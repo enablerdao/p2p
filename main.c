@@ -2,6 +2,8 @@
 #include "stun.h"
 #include "upnp.h"
 #include "discovery.h"
+#include "discovery_server.h"
+#include "enhanced_discovery.h"
 #include "firewall.h"
 #include "reliability.h"
 #include "security.h"
@@ -21,7 +23,9 @@ void handle_signal(int sig) {
 }
 
 // Initialize the network with a specified number of nodes
-void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_discovery, bool use_firewall_bypass, const char* stun_server) {
+void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_discovery, 
+                 bool use_discovery_server, bool use_enhanced_discovery, bool use_firewall_bypass, 
+                 const char* stun_server, const char* discovery_server, int discovery_port) {
     if (count > MAX_NODES) {
         printf("Warning: Maximum number of nodes is %d. Using that instead.\n", MAX_NODES);
         count = MAX_NODES;
@@ -50,6 +54,7 @@ void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_dis
         // Set options
         nodes[i]->use_upnp = use_upnp;
         nodes[i]->use_discovery = use_discovery;
+        nodes[i]->use_discovery_server = use_discovery_server;
         nodes[i]->firewall_bypass = use_firewall_bypass;
         
         // Enable NAT traversal if requested
@@ -88,6 +93,20 @@ void init_network(int count, bool use_nat_traversal, bool use_upnp, bool use_dis
         // Enable discovery for all nodes
         for (int i = 0; i < num_nodes; i++) {
             discovery_init(nodes[i]);
+        }
+    }
+    
+    // Enable discovery server client for all nodes
+    if (use_discovery_server) {
+        for (int i = 0; i < num_nodes; i++) {
+            start_discovery_server_client(nodes[i], discovery_server, discovery_port);
+        }
+    }
+    
+    // Enable enhanced discovery for all nodes
+    if (use_enhanced_discovery) {
+        for (int i = 0; i < num_nodes; i++) {
+            enhanced_discovery_init(nodes[i]);
         }
     }
     
@@ -157,24 +176,29 @@ void maintain_network() {
 void print_usage(const char* program_name) {
     printf("Usage: %s [options]\n", program_name);
     printf("Options:\n");
-    printf("  -n COUNT       Number of nodes to create (default: 10)\n");
+    printf("  -n COUNT       Number of nodes to create (default: 5)\n");
     printf("  -T             Disable NAT traversal (enabled by default)\n");
     printf("  -U             Disable UPnP port forwarding (enabled by default)\n");
     printf("  -D             Disable automatic peer discovery (enabled by default)\n");
+    printf("  -E             Disable enhanced peer discovery (enabled by default)\n");
+    printf("  -S             Disable discovery server (disabled by default)\n");
     printf("  -F             Disable firewall bypass mode (enabled by default)\n");
     printf("  -s SERVER      STUN server to use (default: stun.l.google.com)\n");
+    printf("  -d SERVER:PORT Discovery server to use (default: %s:%d)\n", 
+           DEFAULT_DISCOVERY_SERVER, DEFAULT_DISCOVERY_PORT);
     printf("  -p PEER        Add a remote peer (format: id:ip:port)\n");
     printf("  -f             Explicitly enable firewall bypass mode (enabled by default)\n");
     printf("  -h             Display this help message\n");
-    printf("\nAll features (NAT traversal, UPnP, peer discovery, firewall bypass) are enabled by default.\n");
+    printf("\nEnhanced discovery is enabled by default, which allows automatic peer discovery without a central server.\n");
     printf("Use capital letters to disable features (e.g., -T to disable NAT traversal).\n");
     printf("\nInteractive commands available during runtime:\n");
     printf("  status         Show status of all nodes\n");
+    printf("  list, nodes    List all nodes and peers\n");
     printf("  ping <id>      Ping a specific node\n");
     printf("  send <id> <msg> Send a message to a specific node\n");
     printf("  diag           Run network diagnostics\n");
     printf("  help           Show help message\n");
-    printf("  exit           Exit the program\n");
+    printf("  exit, quit     Exit the program\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -182,12 +206,18 @@ int main(int argc, char* argv[]) {
     bool use_nat_traversal = true;  // デフォルトで有効化
     bool use_upnp = true;           // デフォルトで有効化
     bool use_discovery = true;      // デフォルトで有効化
+    bool use_discovery_server = false; // デフォルトで無効化
+    bool use_enhanced_discovery = true; // デフォルトで有効化
     bool use_firewall_bypass = true; // デフォルトで有効化
     bool disable_nat_traversal = false;
     bool disable_upnp = false;
     bool disable_discovery = false;
+    bool disable_discovery_server = false;
+    bool disable_enhanced_discovery = false;
     bool disable_firewall_bypass = false;
     char stun_server[256] = "stun.l.google.com";
+    char discovery_server[256] = DEFAULT_DISCOVERY_SERVER;
+    int discovery_port = DEFAULT_DISCOVERY_PORT;
     int opt;
     
     // Remote peers to add
@@ -199,7 +229,7 @@ int main(int argc, char* argv[]) {
     int remote_peer_count = 0;
     
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "n:TUDFs:p:hf")) != -1) {
+    while ((opt = getopt(argc, argv, "n:TUDFSEs:d:p:hf")) != -1) {
         switch (opt) {
             case 'n':
                 node_count = atoi(optarg);
@@ -217,8 +247,27 @@ int main(int argc, char* argv[]) {
             case 'D':
                 disable_discovery = true;
                 break;
+            case 'S':  // ディスカバリーサーバーを無効化
+                disable_discovery_server = true;
+                break;
+            case 'E':  // 拡張ディスカバリーを無効化
+                disable_enhanced_discovery = true;
+                break;
             case 'F':  // ファイアウォール対策を無効化
                 disable_firewall_bypass = true;
+                break;
+            case 'd':  // ディスカバリーサーバーを指定
+                char *server = strtok(optarg, ":");
+                char *port_str = strtok(NULL, ":");
+                
+                if (server) {
+                    strncpy(discovery_server, server, sizeof(discovery_server) - 1);
+                    discovery_server[sizeof(discovery_server) - 1] = '\0';
+                }
+                
+                if (port_str) {
+                    discovery_port = atoi(port_str);
+                }
                 break;
             case 's':
                 strncpy(stun_server, optarg, sizeof(stun_server) - 1);
@@ -253,6 +302,8 @@ int main(int argc, char* argv[]) {
     if (disable_nat_traversal) use_nat_traversal = false;
     if (disable_upnp) use_upnp = false;
     if (disable_discovery) use_discovery = false;
+    if (disable_discovery_server) use_discovery_server = false;
+    if (disable_enhanced_discovery) use_enhanced_discovery = false;
     if (disable_firewall_bypass) use_firewall_bypass = false;
     
     // Set up signal handler
@@ -266,15 +317,23 @@ int main(int argc, char* argv[]) {
     printf("│ NAT traversal:       %s                      │\n", use_nat_traversal ? "ENABLED " : "DISABLED");
     printf("│ UPnP:                %s                      │\n", use_upnp ? "ENABLED " : "DISABLED");
     printf("│ Automatic discovery: %s                      │\n", use_discovery ? "ENABLED " : "DISABLED");
+    printf("│ Enhanced discovery:  %s                      │\n", use_enhanced_discovery ? "ENABLED " : "DISABLED");
+    printf("│ Discovery server:    %s                      │\n", use_discovery_server ? "ENABLED " : "DISABLED");
     printf("│ Firewall bypass:     %s                      │\n", use_firewall_bypass ? "ENABLED " : "DISABLED");
     if (use_nat_traversal) {
         printf("│ STUN server:         %-30s │\n", stun_server);
+    }
+    if (use_discovery_server) {
+        printf("│ Discovery server:    %-30s │\n", discovery_server);
+        printf("│ Discovery port:      %-30d │\n", discovery_port);
     }
     printf("└─────────────────────────────────────────────────────┘\n");
     printf("\033[0m"); // Reset text formatting
     
     // Initialize network
-    init_network(node_count, use_nat_traversal, use_upnp, use_discovery, use_firewall_bypass, stun_server);
+    init_network(node_count, use_nat_traversal, use_upnp, use_discovery, 
+                use_discovery_server, use_enhanced_discovery, use_firewall_bypass, 
+                stun_server, discovery_server, discovery_port);
     
     // Add remote peers if specified
     if (remote_peer_count > 0) {

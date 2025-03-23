@@ -46,6 +46,7 @@ typedef struct {
     bool is_behind_nat;         // Whether this node is behind NAT
     bool use_upnp;              // Whether to use UPnP for port forwarding
     bool use_discovery;         // Whether to use automatic peer discovery
+    bool use_discovery_server;  // Whether to use discovery server
     bool firewall_bypass;       // Whether to use firewall bypass techniques
     NodeInfo peers[MAX_NODES];  // Information about peer nodes
     int peer_count;             // Number of connected peers
